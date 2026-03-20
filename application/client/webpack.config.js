@@ -59,7 +59,7 @@ const config = {
     chunkFilename: "scripts/chunk-[contenthash].js",
     filename: "scripts/[name].js",
     path: DIST_PATH,
-    publicPath: "auto",
+    publicPath: "/",
     clean: true,
   },
   plugins: [
@@ -67,7 +67,6 @@ const config = {
       BUILD_DATE: new Date().toISOString(),
       // Heroku では SOURCE_VERSION 環境変数から commit hash を参照できます
       COMMIT_HASH: process.env.SOURCE_VERSION || "",
-      NODE_ENV: "development",
     }),
     new webpack.ContextReplacementPlugin(/moment[\/\\]locale$/, /ja/),
     new MiniCssExtractPlugin({
@@ -121,8 +120,13 @@ const config = {
   optimization: {
     chunkIds: "deterministic",
     moduleIds: "deterministic",
-    minimize: false,
-    splitChunks: false,
+    minimize: true,
+    splitChunks: {
+      chunks: "all",
+      maxSize: 500000,
+    },
+    usedExports: true,
+    sideEffects: true,
   },
   cache: {
     type: "filesystem",
