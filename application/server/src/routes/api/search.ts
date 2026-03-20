@@ -81,9 +81,10 @@ searchRouter.get("/search", async (req, res) => {
 
   mergedPosts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  // Apply pagination after merge+dedup (needed because two queries may overlap)
-  const normalizedOffset = Number.isFinite(offset) && (offset ?? 0) > 0 ? (offset as number) : 0;
-  const normalizedLimit = Number.isFinite(limit) && (limit ?? 0) > 0 ? (limit as number) : mergedPosts.length;
+  const normalizedOffset = Number.isFinite(offset) ? Math.max(0, offset ?? 0) : 0;
+  const normalizedLimit =
+    Number.isFinite(limit) && (limit ?? 0) > 0 ? limit : mergedPosts.length;
+
   const result = mergedPosts.slice(normalizedOffset, normalizedOffset + normalizedLimit);
 
   return res.status(200).type("application/json").send(result);

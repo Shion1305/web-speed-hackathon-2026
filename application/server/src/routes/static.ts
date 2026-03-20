@@ -14,10 +14,6 @@ import {
 
 export const staticRouter = Router();
 
-// In-memory cache for Sharp-transformed images (keyed by path|w|h|format)
-const transformedImageCache = new Map<string, Buffer>();
-const TRANSFORMED_IMAGE_CACHE_MAX = 500;
-
 // SPA 対応のため、ファイルが存在しないときに index.html を返す
 staticRouter.use(history());
 
@@ -62,17 +58,6 @@ staticRouter.use(async (req, res, next) => {
     try {
       await fs.access(resolvedJpgPath);
 
-      const fmt = supportsWebp ? "webp" : "jpg";
-      const cacheKey = `${relativeJpgPath}|${width ?? ""}x${height ?? ""}|${fmt}`;
-      const contentType = supportsWebp ? "image/webp" : "image/jpeg";
-
-      const cached = transformedImageCache.get(cacheKey);
-      if (cached !== undefined) {
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        res.setHeader("Content-Type", contentType);
-        return res.send(cached);
-      }
-
       let pipeline = sharp(resolvedJpgPath);
       if (width !== undefined || height !== undefined) {
         pipeline = pipeline.resize(width, height, { fit: "cover" });
@@ -84,10 +69,7 @@ staticRouter.use(async (req, res, next) => {
       }
 
       const buffer = await pipeline.toBuffer();
-
-      if (transformedImageCache.size < TRANSFORMED_IMAGE_CACHE_MAX) {
-        transformedImageCache.set(cacheKey, buffer);
-      }
+      const contentType = supportsWebp ? "image/webp" : "image/jpeg";
 
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       res.setHeader("Content-Type", contentType);

@@ -2,20 +2,14 @@ import { Router } from "express";
 import httpErrors from "http-errors";
 
 import { Comment, Post } from "@web-speed-hackathon-2026/server/src/models";
-import { cache, TTL } from "../../cache";
 
 export const postRouter = Router();
 
 postRouter.get("/posts", async (req, res) => {
-  const limit = req.query["limit"] != null ? Number(req.query["limit"]) : undefined;
-  const offset = req.query["offset"] != null ? Number(req.query["offset"]) : undefined;
-  const cacheKey = `posts:${limit ?? "all"}:${offset ?? 0}`;
-
-  let posts = cache.get<Post[]>(cacheKey);
-  if (posts === undefined) {
-    posts = await Post.findAll({ limit, offset });
-    cache.set(cacheKey, posts, TTL.POST);
-  }
+  const posts = await Post.findAll({
+    limit: req.query["limit"] != null ? Number(req.query["limit"]) : undefined,
+    offset: req.query["offset"] != null ? Number(req.query["offset"]) : undefined,
+  });
 
   return res.status(200).type("application/json").send(posts);
 });
@@ -63,9 +57,6 @@ postRouter.post("/posts", async (req, res) => {
       ],
     },
   );
-
-  // Invalidate timeline cache
-  cache.deleteByPrefix("posts:");
 
   return res.status(200).type("application/json").send(post);
 });
