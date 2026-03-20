@@ -121,7 +121,7 @@ const config = {
     moduleIds: "deterministic",
     minimize: true,
     splitChunks: {
-      chunks: "all",
+      chunks: "async",
       maxSize: 500000,
     },
     usedExports: true,
