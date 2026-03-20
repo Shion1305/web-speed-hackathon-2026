@@ -19,6 +19,11 @@ jobs:
               with:
                   fetch-depth: 0
 
+            - name: Add parent repository as upstream remote
+              run: |
+                  git remote add upstream https://github.com/CyberAgentHack/web-speed-hackathon-2026.git || true
+                  git fetch upstream main
+
             - name: Set up Node.js 24.14.0
               uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
               with:
@@ -51,12 +56,12 @@ jobs:
 
             - name: Detect initial commit hash
               run: |
-                  INITIAL_SHA="$(git rev-list --max-parents=0 --reverse HEAD | head -n 1)"
+                  INITIAL_SHA="$(git rev-list --max-parents=0 --reverse upstream/main | head -n 1)"
                   if [ -z "${INITIAL_SHA}" ]; then
-                    echo "ERROR: Failed to resolve initial commit hash"
+                    echo "ERROR: Failed to resolve initial commit hash from upstream/main"
                     exit 1
                   fi
-                  echo "Resolved initial commit: ${INITIAL_SHA}"
+                  echo "Resolved initial commit from upstream/main: ${INITIAL_SHA}"
                   echo "Current commit: ${GITHUB_SHA}"
                   echo "INITIAL_SHA=${INITIAL_SHA}" >> "${GITHUB_ENV}"
                   echo "INIT_SNAPSHOTS_ARTIFACT=regulation-init-snapshots-${INITIAL_SHA}" >> "${GITHUB_ENV}"
