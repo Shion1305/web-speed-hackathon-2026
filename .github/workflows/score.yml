@@ -141,11 +141,13 @@ jobs:
             - name: Run scoring tool
               id: scoring
               working-directory: scoring-tool
-              env:
-                  GITHUB_ACTIONS: ""
               run: |
                   set -o pipefail
-                  pnpm start --applicationUrl http://localhost:8080 \
+                  # GITHUB_ACTIONS must be truly unset (not just empty string) because
+                  # index.ts checks `!= null` — empty string passes that check and causes
+                  # crashes on payload.issue/comment access for push/pull_request events.
+                  # env -u unsets the variable in the child process.
+                  env -u GITHUB_ACTIONS pnpm start --applicationUrl http://localhost:8080 \
                     2>&1 | tee /tmp/score-output.txt
 
             # ------------------------------------------------------------------ #
