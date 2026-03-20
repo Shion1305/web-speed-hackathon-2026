@@ -3,11 +3,18 @@ import { HelmetProvider } from "react-helmet";
 import { Route, Routes, useLocation, useNavigate } from "react-router";
 
 import { AppPage } from "@web-speed-hackathon-2026/client/src/components/application/AppPage";
-import { AuthModalContainer } from "@web-speed-hackathon-2026/client/src/containers/AuthModalContainer";
-import { NewPostModalContainer } from "@web-speed-hackathon-2026/client/src/containers/NewPostModalContainer";
 import { TimelineContainer } from "@web-speed-hackathon-2026/client/src/containers/TimelineContainer";
+import {
+  listenDialogOpenRequest,
+  openDialog,
+} from "@web-speed-hackathon-2026/client/src/utils/dialog_command";
 import { fetchJSON, sendJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
 
+const AuthModalContainer = lazy(() =>
+  import("@web-speed-hackathon-2026/client/src/containers/AuthModalContainer").then((m) => ({
+    default: m.AuthModalContainer,
+  })),
+);
 const CrokContainer = lazy(() =>
   import("@web-speed-hackathon-2026/client/src/containers/CrokContainer").then((m) => ({
     default: m.CrokContainer,
@@ -28,6 +35,11 @@ const DirectMessageListContainer = lazy(() =>
 const NotFoundContainer = lazy(() =>
   import("@web-speed-hackathon-2026/client/src/containers/NotFoundContainer").then((m) => ({
     default: m.NotFoundContainer,
+  })),
+);
+const NewPostModalContainer = lazy(() =>
+  import("@web-speed-hackathon-2026/client/src/containers/NewPostModalContainer").then((m) => ({
+    default: m.NewPostModalContainer,
   })),
 );
 const PostContainer = lazy(() =>
@@ -75,6 +87,40 @@ export const AppContainer = () => {
 
   const authModalId = useId();
   const newPostModalId = useId();
+  const [isAuthModalMounted, setIsAuthModalMounted] = useState(false);
+  const [isNewPostModalMounted, setIsNewPostModalMounted] = useState(false);
+
+  const handleDialogOpenRequest = useCallback(
+    (dialogId: string) => {
+      if (dialogId === authModalId) {
+        setIsAuthModalMounted(true);
+        return;
+      }
+
+      if (dialogId === newPostModalId) {
+        setIsNewPostModalMounted(true);
+      }
+    },
+    [authModalId, newPostModalId],
+  );
+
+  useEffect(() => {
+    return listenDialogOpenRequest(handleDialogOpenRequest);
+  }, [handleDialogOpenRequest]);
+
+  useEffect(() => {
+    if (!isAuthModalMounted) {
+      return;
+    }
+    openDialog(authModalId);
+  }, [authModalId, isAuthModalMounted]);
+
+  useEffect(() => {
+    if (!isNewPostModalMounted) {
+      return;
+    }
+    openDialog(newPostModalId);
+  }, [newPostModalId, isNewPostModalMounted]);
 
   return (
     <HelmetProvider>
@@ -110,8 +156,12 @@ export const AppContainer = () => {
         </Suspense>
       </AppPage>
 
-      <AuthModalContainer id={authModalId} onUpdateActiveUser={setActiveUser} />
-      <NewPostModalContainer id={newPostModalId} />
+      <Suspense fallback={null}>
+        {isAuthModalMounted ? (
+          <AuthModalContainer id={authModalId} onUpdateActiveUser={setActiveUser} />
+        ) : null}
+        {isNewPostModalMounted ? <NewPostModalContainer id={newPostModalId} /> : null}
+      </Suspense>
     </HelmetProvider>
   );
 };
