@@ -28,6 +28,8 @@ FROM base
 
 ENV NODE_ENV=production
 ENV PORT=8080
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+COPY --from=build /root/.cache/node/corepack /root/.cache/node/corepack
 COPY --from=build /app /app
 
 EXPOSE 8080
