@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { SubmissionError } from "redux-form";
 
 import { NewDirectMessageModalPage } from "@web-speed-hackathon-2026/client/src/components/direct_message/NewDirectMessageModalPage";
 import { Modal } from "@web-speed-hackathon-2026/client/src/components/modal/Modal";
@@ -14,12 +13,15 @@ interface Props {
 export const NewDirectMessageModalContainer = ({ id }: Props) => {
   const ref = useRef<HTMLDialogElement>(null);
   const [resetKey, setResetKey] = useState(0);
+  const [serverError, setServerError] = useState<string | undefined>(undefined);
+
   useEffect(() => {
     if (!ref.current) return;
     const element = ref.current;
 
     const handleToggle = () => {
       setResetKey((key) => key + 1);
+      setServerError(undefined);
     };
     element.addEventListener("toggle", handleToggle);
     return () => {
@@ -32,15 +34,14 @@ export const NewDirectMessageModalContainer = ({ id }: Props) => {
   const handleSubmit = useCallback(
     async (values: NewDirectMessageFormData) => {
       try {
+        setServerError(undefined);
         const user = await fetchJSON<Models.User>(`/api/v1/users/${values.username}`);
         const conversation = await sendJSON<Models.DirectMessageConversation>(`/api/v1/dm`, {
           peerId: user.id,
         });
         navigate(`/dm/${conversation.id}`);
       } catch {
-        throw new SubmissionError({
-          _error: "ユーザーが見つかりませんでした",
-        });
+        setServerError("ユーザーが見つかりませんでした");
       }
     },
     [navigate],
@@ -48,7 +49,12 @@ export const NewDirectMessageModalContainer = ({ id }: Props) => {
 
   return (
     <Modal id={id} ref={ref} closedby="any">
-      <NewDirectMessageModalPage key={resetKey} id={id} onSubmit={handleSubmit} />
+      <NewDirectMessageModalPage
+        key={resetKey}
+        id={id}
+        onSubmit={handleSubmit}
+        serverError={serverError}
+      />
     </Modal>
   );
 };
