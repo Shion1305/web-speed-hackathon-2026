@@ -45,12 +45,11 @@ E2E_BASE_URL=https://... pnpm run test # run VRT against remote
 ### Docker
 
 ```bash
-# Build with Dockerfile.build (multi-stage, for testing production image)
-docker build -f Dockerfile.build -t test .
+# Build production image
+docker build -f Dockerfile -t test .
 docker run -it --rm -p 8080:8080 test
 
-# Production Dockerfile (used for deployment)
-# application/Dockerfile — just `FROM ghcr.io/shion1305/web-speed-hackathon-2026:latest`
+# Runtime serves with nginx (front) + node app (backend) in one container
 ```
 
 ### Database
@@ -75,7 +74,6 @@ application/
   public/          # Static assets: images, sounds, movies, fonts, dicts, sprites
   upload/          # User-uploaded files (runtime)
   dist/            # Built client output (gitignored)
-Dockerfile.build   # Multi-stage build for testing
 docs/              # Competition rules, scoring, test cases
 scoring-tool/      # Local Lighthouse measurement tool
 ```
