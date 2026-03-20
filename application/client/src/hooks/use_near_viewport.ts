@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { RefCallback, useCallback, useEffect, useMemo, useState } from "react";
 
 interface Options {
   rootMargin?: string;
@@ -6,14 +6,17 @@ interface Options {
 
 interface Result<T extends Element> {
   isNearViewport: boolean;
-  targetRef: RefObject<T | null>;
+  targetRef: RefCallback<T>;
 }
 
 export function useNearViewport<T extends Element>({
   rootMargin = "256px 0px",
 }: Options = {}): Result<T> {
-  const targetRef = useRef<T>(null);
+  const [target, setTarget] = useState<T | null>(null);
   const [isNearViewport, setIsNearViewport] = useState(false);
+  const targetRef = useCallback<RefCallback<T>>((element) => {
+    setTarget(element);
+  }, []);
 
   const observerOptions = useMemo(() => ({ rootMargin }), [rootMargin]);
 
@@ -22,7 +25,6 @@ export function useNearViewport<T extends Element>({
       return;
     }
 
-    const target = targetRef.current;
     if (target == null) {
       return;
     }
@@ -45,7 +47,7 @@ export function useNearViewport<T extends Element>({
     return () => {
       observer.disconnect();
     };
-  }, [isNearViewport, observerOptions]);
+  }, [isNearViewport, observerOptions, target]);
 
   return {
     isNearViewport,

@@ -1,8 +1,6 @@
-import classNames from "classnames";
 import { RefObject, useCallback, useRef, useState } from "react";
 
 import { AspectRatioBox } from "@web-speed-hackathon-2026/client/src/components/foundation/AspectRatioBox";
-import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
 import { useNearViewport } from "@web-speed-hackathon-2026/client/src/hooks/use_near_viewport";
 
 interface Props {
@@ -44,26 +42,28 @@ export const PausableMovie = ({ src }: Props) => {
     }
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
+    setIsMovieReady(true);
   }, []);
 
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMovieReady, setIsMovieReady] = useState(false);
   const [pausedFrameUrl, setPausedFrameUrl] = useState<string | null>(null);
   const handleClick = useCallback(() => {
-    setIsPlaying((isPlaying) => {
-      if (isPlaying) {
-        setPausedFrameUrl(captureCurrentFrame(imageRef));
-      } else {
-        setPausedFrameUrl(null);
+    if (!isMovieReady) {
+      return;
+    }
+    setPausedFrameUrl((pausedFrameUrl) => {
+      if (pausedFrameUrl == null) {
+        return captureCurrentFrame(imageRef);
       }
-      return !isPlaying;
+      return null;
     });
-  }, []);
+  }, [isMovieReady]);
 
   return (
     <AspectRatioBox aspectHeight={1} aspectWidth={1}>
       <button
         aria-label="動画プレイヤー"
-        className="group relative block h-full w-full"
+        className="relative block h-full w-full"
         onClick={handleClick}
         ref={targetRef}
         type="button"
@@ -86,16 +86,6 @@ export const PausableMovie = ({ src }: Props) => {
         ) : (
           <img alt="" className="h-full w-full object-cover" src={pausedFrameUrl} />
         )}
-        <div
-          className={classNames(
-            "absolute left-1/2 top-1/2 flex items-center justify-center w-16 h-16 text-cax-surface-raised text-3xl bg-cax-overlay/50 rounded-full -translate-x-1/2 -translate-y-1/2",
-            {
-              "opacity-0 group-hover:opacity-100": isPlaying,
-            },
-          )}
-        >
-          <FontAwesomeIcon iconType={isPlaying ? "pause" : "play"} styleType="solid" />
-        </div>
       </button>
     </AspectRatioBox>
   );
