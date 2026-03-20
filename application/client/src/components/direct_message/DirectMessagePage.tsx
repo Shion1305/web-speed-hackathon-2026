@@ -2,12 +2,12 @@ import classNames from "classnames";
 import {
   ChangeEvent,
   useCallback,
-  useEffect,
   useId,
   useRef,
   useState,
   KeyboardEvent,
   FormEvent,
+  useEffect,
 } from "react";
 
 import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
@@ -44,7 +44,7 @@ export const DirectMessagePage = ({
   const [text, setText] = useState("");
   const textAreaRows = Math.min((text || "").split("\n").length, 5);
   const isInvalid = text.trim().length === 0;
-  const messagesAreaRef = useRef<HTMLDivElement>(null);
+  const scrollHeightRef = useRef(0);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -74,18 +74,17 @@ export const DirectMessagePage = ({
     [onSubmit, text],
   );
 
-  const scrollToBottom = useCallback(() => {
-    const element = messagesAreaRef.current;
-    if (element == null) {
-      return;
-    }
-
-    element.scrollTop = element.scrollHeight;
-  }, []);
-
   useEffect(() => {
-    scrollToBottom();
-  }, [conversation.messages.length, isPeerTyping, scrollToBottom]);
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height ?? document.body.scrollHeight;
+      if (height !== scrollHeightRef.current) {
+        scrollHeightRef.current = height;
+        window.scrollTo(0, height);
+      }
+    });
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  }, []);
 
   if (conversationError != null) {
     return (
@@ -113,10 +112,7 @@ export const DirectMessagePage = ({
         </div>
       </header>
 
-      <div
-        className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8"
-        ref={messagesAreaRef}
-      >
+      <div className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8">
         {conversation.messages.length === 0 && (
           <p className="text-cax-text-muted text-center text-sm">
             まだメッセージはありません。最初のメッセージを送信してみましょう。
@@ -129,7 +125,6 @@ export const DirectMessagePage = ({
 
             return (
               <li
-                key={message.id}
                 className={classNames(
                   "flex flex-col w-full",
                   isActiveUserSend ? "items-end" : "items-start",
