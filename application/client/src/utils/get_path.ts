@@ -1,5 +1,5 @@
 export function getImagePath(imageId: string): string {
-  return `/images/${imageId}.webp`;
+  return `/images/${imageId}.jpg`;
 }
 
 export function getMoviePath(movieId: string): string {
