@@ -3,6 +3,7 @@ import { RefObject, useCallback, useRef, useState } from "react";
 
 import { AspectRatioBox } from "@web-speed-hackathon-2026/client/src/components/foundation/AspectRatioBox";
 import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
+import { useNearViewport } from "@web-speed-hackathon-2026/client/src/hooks/use_near_viewport";
 
 interface Props {
   src: string;
@@ -32,6 +33,9 @@ function captureCurrentFrame(imageRef: RefObject<HTMLImageElement | null>): stri
 export const PausableMovie = ({ src }: Props) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const readyCanvasRef = useRef<HTMLCanvasElement>(null);
+  const { isNearViewport, targetRef } = useNearViewport<HTMLButtonElement>({
+    rootMargin: "320px 0px",
+  });
   const handleLoadImage = useCallback(() => {
     const image = imageRef.current;
     const canvas = readyCanvasRef.current;
@@ -61,6 +65,7 @@ export const PausableMovie = ({ src }: Props) => {
         aria-label="動画プレイヤー"
         className="group relative block h-full w-full"
         onClick={handleClick}
+        ref={targetRef}
         type="button"
       >
         <canvas
@@ -72,9 +77,11 @@ export const PausableMovie = ({ src }: Props) => {
           <img
             alt=""
             className="h-full w-full object-cover"
+            decoding="async"
+            loading="lazy"
             ref={imageRef}
             onLoad={handleLoadImage}
-            src={src}
+            src={isNearViewport ? src : undefined}
           />
         ) : (
           <img alt="" className="h-full w-full object-cover" src={pausedFrameUrl} />
