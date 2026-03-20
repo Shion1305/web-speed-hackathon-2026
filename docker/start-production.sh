@@ -2,7 +2,7 @@
 set -eu
 
 mkdir -p /app/upload/images /app/upload/movies /app/upload/sounds
-mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
+mkdir -p /tmp/nginx_cache /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
 
 # Keep Node behind nginx. nginx listens on :8080, Node on :3001.
 PORT="${NODE_APP_PORT:-3001}" pnpm start &

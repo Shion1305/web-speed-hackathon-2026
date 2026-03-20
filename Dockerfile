@@ -64,8 +64,8 @@ COPY --chown=nodejs:nodejs ./docker/start-production.sh /app/docker/start-produc
 
 RUN chmod +x /app/docker/start-production.sh && \
     mkdir -p /app/upload/images /app/upload/movies /app/upload/sounds && \
-    mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && \
-    chown -R nodejs:nodejs /app /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
+    mkdir -p /tmp/nginx_cache /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && \
+    chown -R nodejs:nodejs /app /tmp/nginx_cache /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
 
 # Set production environment
 ENV NODE_ENV=production
