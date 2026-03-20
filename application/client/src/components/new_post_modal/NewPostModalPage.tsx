@@ -27,8 +27,13 @@ function loadImageConverter() {
   return imageConverterPromise;
 }
 
+interface SubmitImage {
+  alt: string;
+  file: File;
+}
+
 interface SubmitParams {
-  images: File[];
+  images: SubmitImage[];
   movie: File | undefined;
   sound: File | undefined;
   text: string;
@@ -95,9 +100,10 @@ export const NewPostModalPage = ({
         .then(async ([{ convertImage }, { MagickFormat }]) => {
           const convertedFiles = await Promise.all(
             files.map((file) =>
-              convertImage(file, { extension: MagickFormat.Jpg }).then(
-                (blob) => new File([blob], "converted.jpg", { type: "image/jpeg" }),
-              ),
+              convertImage(file, { extension: MagickFormat.Jpg }).then(({ alt, blob }) => ({
+                alt,
+                file: new File([blob], "converted.jpg", { type: "image/jpeg" }),
+              })),
             ),
           );
 

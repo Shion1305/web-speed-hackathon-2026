@@ -5,8 +5,13 @@ import { Modal } from "@web-speed-hackathon-2026/client/src/components/modal/Mod
 import { NewPostModalPage } from "@web-speed-hackathon-2026/client/src/components/new_post_modal/NewPostModalPage";
 import { sendFile, sendJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
 
+interface SubmitImage {
+  alt: string;
+  file: File;
+}
+
 interface SubmitParams {
-  images: File[];
+  images: SubmitImage[];
   movie: File | undefined;
   sound: File | undefined;
   text: string;
@@ -17,38 +22,17 @@ interface UploadedImage {
 }
 
 const DISALLOWED_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-
-async function extractImageAlt(file: File): Promise<string> {
-  try {
-    const { load, ImageIFD } = await import("piexifjs");
-    const binary = Array.from(new Uint8Array(await file.arrayBuffer()))
-      .map((byte) => String.fromCharCode(byte))
-      .join("");
-    const exif = load(binary);
-    const rawDescription = exif?.["0th"]?.[ImageIFD.ImageDescription];
-    if (typeof rawDescription !== "string") {
-      return "";
-    }
-    const decoded = new TextDecoder().decode(
-      Uint8Array.from(rawDescription, (char) => char.charCodeAt(0)),
-    );
-    return decoded.replace(DISALLOWED_CONTROL_CHARACTERS, "");
-  } catch {
-    return "";
-  }
+function sanitizeAltText(alt: string): string {
+  return alt.replace(DISALLOWED_CONTROL_CHARACTERS, "");
 }
 
 async function sendNewPost({ images, movie, sound, text }: SubmitParams): Promise<Models.Post> {
   const payload = {
     images: images
       ? await Promise.all(
-          images.map(async (image) => {
-            const [uploadedImage, alt] = await Promise.all([
-              sendFile<UploadedImage>("/api/v1/images", image),
-              extractImageAlt(image),
-            ]);
-
-            return { id: uploadedImage.id, alt };
+          images.map(async ({ alt, file }) => {
+            const uploadedImage = await sendFile<UploadedImage>("/api/v1/images", file);
+            return { id: uploadedImage.id, alt: sanitizeAltText(alt) };
           }),
         )
       : [],

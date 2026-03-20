@@ -6,10 +6,16 @@ interface Options {
   extension: MagickFormat;
 }
 
-export async function convertImage(file: File, options: Options): Promise<Blob> {
+interface ConvertedImage {
+  alt: string;
+  blob: Blob;
+}
+
+export async function convertImage(file: File, options: Options): Promise<ConvertedImage> {
   await initializeImageMagick(new URL(magickWasmUrl, location.origin));
 
   const byteArray = new Uint8Array(await file.arrayBuffer());
+  const binaryDecoder = new TextDecoder("latin1");
 
   return new Promise((resolve) => {
     ImageMagick.read(byteArray, (img) => {
@@ -19,23 +25,22 @@ export async function convertImage(file: File, options: Options): Promise<Blob> 
 
       img.write((output) => {
         if (comment == null) {
-          resolve(new Blob([output as Uint8Array<ArrayBuffer>]));
+          resolve({ alt: "", blob: new Blob([output as Uint8Array<ArrayBuffer>]) });
           return;
         }
 
         // ImageMagick では EXIF の ImageDescription フィールドに保存されているデータが
         // 非標準の Comment フィールドに移されてしまうため
         // piexifjs を使って ImageDescription フィールドに書き込む
-        const binary = Array.from(output as Uint8Array<ArrayBuffer>)
-          .map((b) => String.fromCharCode(b))
-          .join("");
-        const descriptionBinary = Array.from(new TextEncoder().encode(comment))
-          .map((b) => String.fromCharCode(b))
-          .join("");
+        const binary = binaryDecoder.decode(output as Uint8Array<ArrayBuffer>);
+        const descriptionBinary = binaryDecoder.decode(new TextEncoder().encode(comment));
         const exifStr = dump({ "0th": { [ImageIFD.ImageDescription]: descriptionBinary } });
         const outputWithExif = insert(exifStr, binary);
-        const bytes = Uint8Array.from(outputWithExif.split("").map((c) => c.charCodeAt(0)));
-        resolve(new Blob([bytes]));
+        const bytes = new Uint8Array(outputWithExif.length);
+        for (let index = 0; index < outputWithExif.length; index += 1) {
+          bytes[index] = outputWithExif.charCodeAt(index);
+        }
+        resolve({ alt: comment, blob: new Blob([bytes]) });
       });
     });
   });
