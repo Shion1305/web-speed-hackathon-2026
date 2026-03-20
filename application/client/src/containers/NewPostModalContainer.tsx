@@ -3,7 +3,11 @@ import { useNavigate } from "react-router";
 
 import { Modal } from "@web-speed-hackathon-2026/client/src/components/modal/Modal";
 import { NewPostModalPage } from "@web-speed-hackathon-2026/client/src/components/new_post_modal/NewPostModalPage";
-import { sendFile, sendJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
+import {
+  prefetchJSON,
+  sendFile,
+  sendJSON,
+} from "@web-speed-hackathon-2026/client/src/utils/fetchers";
 
 interface SubmitParams {
   images: File[];
@@ -98,6 +102,8 @@ export const NewPostModalContainer = ({ id }: Props) => {
       try {
         setIsLoading(true);
         const post = await sendNewPost(params);
+        const postPath = `/api/v1/posts/${post.id}`;
+        void prefetchJSON(postPath);
         ref.current?.close();
         navigate(`/posts/${post.id}`);
       } catch {
