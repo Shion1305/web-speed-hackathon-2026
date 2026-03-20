@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+
+ARG NODE_VERSION=24.14.0
+ARG PNPM_VERSION=10.32.1
+
+FROM node:${NODE_VERSION}-slim AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init mariadb-server mariadb-client && rm -rf /var/lib/apt/lists/*
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+
+WORKDIR /app
+RUN --mount=type=cache,target=/root/.npm npm install -g pnpm@${PNPM_VERSION}
+
+FROM base AS build
+
+COPY ./application/package.json ./application/pnpm-lock.yaml ./application/pnpm-workspace.yaml ./
+COPY ./application/client/package.json ./client/package.json
+COPY ./application/server/package.json ./server/package.json
+
+RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
+
+COPY ./application .
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm build
+RUN --mount=type=cache,target=/pnpm/store CI=true pnpm install --frozen-lockfile --prod --filter @web-speed-hackathon-2026/server
+
+FROM base AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=build /app/server ./server
+COPY --from=build /app/client/package.json ./client/package.json
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/public ./public
+COPY --from=build /app/node_modules ./node_modules
+COPY ./docker/start-with-mysql.sh /usr/local/bin/start-with-mysql
+
+RUN chmod +x /usr/local/bin/start-with-mysql && mkdir -p /app/upload /var/lib/mysql
+
+ENV NODE_ENV=production
+ENV PORT=3600
+ENV MYSQL_DATABASE=cax
+ENV MYSQL_USER=cax
+ENV MYSQL_PASSWORD=cax
+ENV MYSQL_PORT=3306
+
+EXPOSE 3600
+
+CMD ["dumb-init", "/usr/local/bin/start-with-mysql"]

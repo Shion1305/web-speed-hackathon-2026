@@ -50,7 +50,6 @@ mise.toml
 fly.toml
 
 # Application specific
-application/server/seeds
 application/server/upload
 application/.oxfmtrc.json
 application/.oxlintrc.json

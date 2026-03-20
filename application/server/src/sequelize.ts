@@ -6,24 +6,53 @@ import { Sequelize } from "sequelize";
 
 import { initModels } from "@web-speed-hackathon-2026/server/src/models";
 import { DATABASE_PATH } from "@web-speed-hackathon-2026/server/src/paths";
+import { insertSeeds } from "@web-speed-hackathon-2026/server/src/seeds";
 
 let _sequelize: Sequelize | null = null;
+
+function getDialect(): "sqlite" | "mysql" {
+  return process.env["DB_DIALECT"] === "mysql" ? "mysql" : "sqlite";
+}
 
 export async function initializeSequelize() {
   const prevSequelize = _sequelize;
   _sequelize = null;
   await prevSequelize?.close();
 
-  const TEMP_PATH = path.resolve(
+  const dialect = getDialect();
+  if (dialect === "mysql") {
+    const sequelize = new Sequelize({
+      database: process.env["DB_NAME"] ?? "cax",
+      dialect: "mysql",
+      host: process.env["DB_HOST"] ?? "127.0.0.1",
+      logging: false,
+      password: process.env["DB_PASSWORD"] ?? "cax",
+      pool: {
+        acquire: 30_000,
+        idle: 10_000,
+        max: 4,
+        min: 0,
+      },
+      port: Number(process.env["DB_PORT"] ?? 3306),
+      username: process.env["DB_USER"] ?? "cax",
+    });
+    initModels(sequelize);
+    await sequelize.sync({ force: true, logging: false });
+    await insertSeeds(sequelize);
+    _sequelize = sequelize;
+    return;
+  }
+
+  const tempPath = path.resolve(
     await fs.mkdtemp(path.resolve(os.tmpdir(), "./wsh-")),
     "./database.sqlite",
   );
-  await fs.copyFile(DATABASE_PATH, TEMP_PATH);
+  await fs.copyFile(DATABASE_PATH, tempPath);
 
   _sequelize = new Sequelize({
     dialect: "sqlite",
     logging: false,
-    storage: TEMP_PATH,
+    storage: tempPath,
   });
   initModels(_sequelize);
 
