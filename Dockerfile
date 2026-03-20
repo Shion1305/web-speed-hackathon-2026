@@ -23,11 +23,12 @@ COPY ./application .
 
 RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm build
 
-RUN --mount=type=cache,target=/pnpm/store CI=true pnpm install --frozen-lockfile --prod --filter @web-speed-hackathon-2026/server
+RUN pnpm deploy --filter @web-speed-hackathon-2026/server --prod /out
 
 FROM base
 
-COPY --from=build /app /app
+ENV NODE_ENV=production
+COPY --from=build /out /app
 
 EXPOSE 8080
 CMD [ "pnpm", "start" ]
