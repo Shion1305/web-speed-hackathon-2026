@@ -10,15 +10,16 @@ const getDialogById = (id: string): HTMLDialogElement | null => {
   return dialog instanceof HTMLDialogElement ? dialog : null;
 };
 
-export const showDialog = (dialog: HTMLDialogElement): void => {
+export const showDialog = (dialog: HTMLDialogElement): boolean => {
   if (dialog.open) {
-    return;
+    return true;
   }
   try {
     dialog.showModal();
   } catch {
     // showModal can throw when the browser rejects opening state.
   }
+  return dialog.open;
 };
 
 const dispatchDialogOpenRequest = (dialogId: string): void => {
@@ -35,7 +36,12 @@ const dispatchDialogOpenRequest = (dialogId: string): void => {
 const showDialogWhenReady = (dialogId: string, attempts = 0): void => {
   const dialog = getDialogById(dialogId);
   if (dialog !== null) {
-    showDialog(dialog);
+    const opened = showDialog(dialog);
+    if (!opened && attempts < MAX_DIALOG_LOOKUP_ATTEMPTS) {
+      requestAnimationFrame(() => {
+        showDialogWhenReady(dialogId, attempts + 1);
+      });
+    }
     return;
   }
   if (attempts === 0) {
