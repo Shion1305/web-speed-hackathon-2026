@@ -1,6 +1,6 @@
-import { Helmet } from "react-helmet";
 import { useParams } from "react-router";
 
+import { PageTitle } from "@web-speed-hackathon-2026/client/src/components/application/PageTitle";
 import { InfiniteScroll } from "@web-speed-hackathon-2026/client/src/components/foundation/InfiniteScroll";
 import { PostPage } from "@web-speed-hackathon-2026/client/src/components/post/PostPage";
 import { NotFoundContainer } from "@web-speed-hackathon-2026/client/src/containers/NotFoundContainer";
@@ -20,11 +20,7 @@ const PostContainerContent = ({ postId }: { postId: string | undefined }) => {
   );
 
   if (isLoadingPost) {
-    return (
-      <Helmet>
-        <title>読込中 - CaX</title>
-      </Helmet>
-    );
+    return <PageTitle title="読込中 - CaX" />;
   }
 
   if (post === null) {
@@ -33,9 +29,7 @@ const PostContainerContent = ({ postId }: { postId: string | undefined }) => {
 
   return (
     <InfiniteScroll fetchMore={fetchMore} items={comments}>
-      <Helmet>
-        <title>{post.user.name} さんのつぶやき - CaX</title>
-      </Helmet>
+      <PageTitle title={`${post.user.name} さんのつぶやき - CaX`} />
       <PostPage comments={comments} post={post} />
     </InfiniteScroll>
   );

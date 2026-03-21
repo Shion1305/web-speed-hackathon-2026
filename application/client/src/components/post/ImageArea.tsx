@@ -2,7 +2,10 @@ import classNames from "classnames";
 
 import { AspectRatioBox } from "@web-speed-hackathon-2026/client/src/components/foundation/AspectRatioBox";
 import { CoveredImage } from "@web-speed-hackathon-2026/client/src/components/foundation/CoveredImage";
-import { getImagePath } from "@web-speed-hackathon-2026/client/src/utils/get_path";
+import {
+  getImagePath,
+  getImageSources,
+} from "@web-speed-hackathon-2026/client/src/utils/get_path";
 
 interface Props {
   images: Models.Image[];
@@ -23,6 +26,7 @@ export const ImageArea = ({ images, prioritizeFirstImage = false }: Props) => {
             .map((width) => `${getImagePath(image.id, { w: width })} ${width}w`)
             .join(", ");
           const src = getImagePath(image.id, { w: prioritizeFirstImage && idx === 0 ? 960 : 640 });
+          const sources = getImageSources(image.id, {}, sizes);
 
           return (
             <div
@@ -38,6 +42,7 @@ export const ImageArea = ({ images, prioritizeFirstImage = false }: Props) => {
               <CoveredImage
                 alt={image.alt}
                 priority={prioritizeFirstImage && idx === 0}
+                sources={sources.slice(0, 2)}
                 sizes={sizes}
                 src={src}
                 srcSet={srcSet}

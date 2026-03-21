@@ -7,6 +7,11 @@ import { fetchBinary } from "@web-speed-hackathon-2026/client/src/utils/fetchers
 interface Props {
   alt: string;
   priority?: boolean;
+  sources?: readonly {
+    sizes?: string;
+    srcSet: string;
+    type: string;
+  }[];
   src: string;
   srcSet?: string;
   sizes?: string;
@@ -20,7 +25,7 @@ const sanitizeAltText = (value: string): string => {
 /**
  * アスペクト比を維持したまま、要素のコンテンツボックス全体を埋めるように画像を拡大縮小します
  */
-export const CoveredImage = ({ src, srcSet, sizes, alt, priority = false }: Props) => {
+export const CoveredImage = ({ sources, src, srcSet, sizes, alt, priority = false }: Props) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // ダイアログの背景をクリックしたときに投稿詳細ページに遷移しないようにする
   const handleDialogClick = useCallback((ev: MouseEvent<HTMLDialogElement>) => {
@@ -81,19 +86,24 @@ export const CoveredImage = ({ src, srcSet, sizes, alt, priority = false }: Prop
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <img
-        alt={resolvedAlt}
-        className="absolute inset-0 h-full w-full object-cover"
-        decoding="async"
-        fetchPriority={priority ? "high" : "auto"}
-        loading={priority ? "eager" : "lazy"}
-        onError={() => setIsPriorityImageReady(true)}
-        onLoad={() => setIsPriorityImageReady(true)}
-        sizes={sizes}
-        src={src}
-        srcSet={srcSet}
-        style={priority && !isPriorityImageReady ? { visibility: "hidden" } : undefined}
-      />
+      <picture className="absolute inset-0 h-full w-full">
+        {sources?.map((source) => (
+          <source key={source.type} sizes={source.sizes} srcSet={source.srcSet} type={source.type} />
+        ))}
+        <img
+          alt={resolvedAlt}
+          className="absolute inset-0 h-full w-full object-cover"
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
+          loading={priority ? "eager" : "lazy"}
+          onError={() => setIsPriorityImageReady(true)}
+          onLoad={() => setIsPriorityImageReady(true)}
+          sizes={sizes}
+          src={src}
+          srcSet={srcSet}
+          style={priority && !isPriorityImageReady ? { visibility: "hidden" } : undefined}
+        />
+      </picture>
 
       <button
         className="border-cax-border bg-cax-surface-raised/90 text-cax-text-muted hover:bg-cax-surface absolute right-1 bottom-1 rounded-full border px-2 py-1 text-center text-xs"
