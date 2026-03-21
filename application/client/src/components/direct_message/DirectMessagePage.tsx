@@ -2,6 +2,7 @@ import classNames from "classnames";
 import {
   ChangeEvent,
   useCallback,
+  useMemo,
   useId,
   useRef,
   useState,
@@ -36,6 +37,7 @@ export const DirectMessagePage = ({
   onSubmit,
 }: Props) => {
   const formRef = useRef<HTMLFormElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const textAreaId = useId();
 
   const peer =
@@ -44,7 +46,6 @@ export const DirectMessagePage = ({
   const [text, setText] = useState("");
   const textAreaRows = Math.min((text || "").split("\n").length, 5);
   const isInvalid = text.trim().length === 0;
-  const scrollHeightRef = useRef(0);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -76,16 +77,57 @@ export const DirectMessagePage = ({
   );
 
   useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height ?? document.body.scrollHeight;
-      if (height !== scrollHeightRef.current) {
-        scrollHeightRef.current = height;
-        window.scrollTo(0, height);
-      }
+    const target = messagesScrollRef.current;
+    if (target == null) {
+      return;
+    }
+
+    const id = requestAnimationFrame(() => {
+      target.scrollTop = target.scrollHeight;
     });
-    observer.observe(document.body);
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      cancelAnimationFrame(id);
+    };
+  }, [conversation.messages.length, isPeerTyping]);
+
+  const renderedMessages = useMemo(() => {
+    return conversation.messages.map((message) => {
+      const isActiveUserSend = message.sender.id === activeUser.id;
+
+      return (
+        <li
+          className={classNames(
+            "flex flex-col w-full",
+            isActiveUserSend ? "items-end" : "items-start",
+          )}
+          key={message.id}
+          style={{
+            containIntrinsicSize: "auto 4rem",
+            contentVisibility: "auto",
+          }}
+        >
+          <p
+            className={classNames(
+              "max-w-3/4 rounded-xl border px-4 py-2 text-sm whitespace-pre-wrap leading-relaxed wrap-anywhere",
+              isActiveUserSend
+                ? "rounded-br-sm border-transparent bg-cax-brand text-cax-surface-raised"
+                : "rounded-bl-sm border-cax-border bg-cax-surface text-cax-text",
+            )}
+          >
+            {message.body}
+          </p>
+          <div className="flex gap-1 text-xs">
+            <time dateTime={message.createdAt}>
+              {formatTime(message.createdAt)}
+            </time>
+            {isActiveUserSend && message.isRead && (
+              <span className="text-cax-text-muted">既読</span>
+            )}
+          </div>
+        </li>
+      );
+    });
+  }, [activeUser.id, conversation.messages]);
 
   if (conversationError != null) {
     return (
@@ -113,50 +155,17 @@ export const DirectMessagePage = ({
         </div>
       </header>
 
-      <div className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8">
+      <div
+        className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8"
+        ref={messagesScrollRef}
+      >
         {conversation.messages.length === 0 && (
           <p className="text-cax-text-muted text-center text-sm">
             まだメッセージはありません。最初のメッセージを送信してみましょう。
           </p>
         )}
 
-        <ul className="grid gap-3" data-testid="dm-message-list">
-          {conversation.messages.map((message) => {
-            const isActiveUserSend = message.sender.id === activeUser.id;
-
-            return (
-              <li
-                className={classNames(
-                  "flex flex-col w-full",
-                  isActiveUserSend ? "items-end" : "items-start",
-                )}
-                style={{
-                  containIntrinsicSize: "auto 4rem",
-                  contentVisibility: "auto",
-                }}
-              >
-                <p
-                  className={classNames(
-                    "max-w-3/4 rounded-xl border px-4 py-2 text-sm whitespace-pre-wrap leading-relaxed wrap-anywhere",
-                    isActiveUserSend
-                      ? "rounded-br-sm border-transparent bg-cax-brand text-cax-surface-raised"
-                      : "rounded-bl-sm border-cax-border bg-cax-surface text-cax-text",
-                  )}
-                >
-                  {message.body}
-                </p>
-                <div className="flex gap-1 text-xs">
-                  <time dateTime={message.createdAt}>
-                    {formatTime(message.createdAt)}
-                  </time>
-                  {isActiveUserSend && message.isRead && (
-                    <span className="text-cax-text-muted">既読</span>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="grid gap-3" data-testid="dm-message-list">{renderedMessages}</ul>
       </div>
 
       <div className="sticky bottom-12 z-10 lg:bottom-0">
