@@ -234,10 +234,10 @@ application/upload/**
 application/dist
 application/client/dist
 application/server/dist
+application/public/images/profiles/variants
 
 # Scoring tool
 scoring-tool/node_modules
 
 # Warp/Claude
 .claude
-

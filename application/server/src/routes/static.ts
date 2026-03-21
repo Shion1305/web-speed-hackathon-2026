@@ -21,8 +21,11 @@ export const staticRouter = Router();
 const transformedImageCache = new Map<string, Buffer>();
 const TRANSFORMED_IMAGE_CACHE_MAX = 500;
 const IMAGE_MEDIA_PATH = /^\/images\/.+\.(jpg|webp|avif)$/i;
+const PROFILE_IMAGE_MEDIA_PATH = /^images\/profiles\/([a-f0-9-]{36})\.(jpg|webp|avif)$/i;
 const MOVIE_MEDIA_PATH = /^\/movies\/.+\.(mp4|webm)$/i;
 const SOUND_MEDIA_PATH = /^\/sounds\/.+\.(mp3|ogg)$/i;
+const OPTIMIZED_PROFILE_IMAGE_SIZES = new Set([40, 48, 64, 128]);
+const PROFILE_IMAGE_VARIANTS_DIR = path.resolve(PUBLIC_PATH, "images/profiles/variants");
 
 // ── Bootstrap injection ──────────────────────────────────────────────
 let baseHtml = "";
@@ -152,6 +155,26 @@ staticRouter.use(async (req, res, next) => {
         : requestedExt === "avif"
           ? "image/avif"
           : "image/jpeg";
+    const profileImageMatch = relativePath.match(PROFILE_IMAGE_MEDIA_PATH);
+
+    if (
+      profileImageMatch !== null &&
+      width !== undefined &&
+      height !== undefined &&
+      width === height &&
+      OPTIMIZED_PROFILE_IMAGE_SIZES.has(width)
+    ) {
+      const [, profileImageId] = profileImageMatch;
+      const prebuiltPath = path.resolve(
+        PROFILE_IMAGE_VARIANTS_DIR,
+        `${profileImageId}-${width}.${requestedExt}`,
+      );
+      if (fs.existsSync(prebuiltPath)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.setHeader("Content-Type", contentType);
+        return res.sendFile(prebuiltPath);
+      }
+    }
 
     const cached = transformedImageCache.get(cacheKey);
     if (cached !== undefined) {
