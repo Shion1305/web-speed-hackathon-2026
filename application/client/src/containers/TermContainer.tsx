@@ -1,3 +1,5 @@
+import "./term.css";
+
 import { PageTitle } from "@web-speed-hackathon-2026/client/src/components/application/PageTitle";
 
 export const TermContainer = () => {
