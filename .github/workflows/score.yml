@@ -314,67 +314,59 @@ jobs:
                   if-no-files-found: warn
 
             # ------------------------------------------------------------------ #
-            # 8. Tag the commit showing score delta vs previous main tag
+            # 8. Label the PR with the score delta (PR runs only)
             # ------------------------------------------------------------------ #
-            - name: Compute score tag name and message
-              id: score-tag
-              env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: |
-                  if [ ! -f /tmp/scores.json ]; then
-                    echo "skip=true" >> "$GITHUB_OUTPUT"
-                    exit 0
-                  fi
-                  SCORE=$(node -e "
-                    const s = JSON.parse(require('fs').readFileSync('/tmp/scores.json','utf8'));
-                    const med = s.grandTotal && s.grandTotal.med;
-                    if (med == null) process.exit(1);
-                    process.stdout.write(String(Math.round(med * 100) / 100));
-                  " 2>/dev/null) || { echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; }
-
-                  # Find the latest main-branch score tag via GitHub API (no git fetch needed)
-                  PREV_TAG=$(gh api "repos/${{ github.repository }}/git/refs/tags" \
-                    --jq '[.[] | select(.ref | test("refs/tags/score/[0-9]"))] | last | .ref' \
-                    2>/dev/null | sed 's|refs/tags/||')
-
-                  if [ -n "${PREV_TAG}" ]; then
-                    PREV_SCORE=$(echo "${PREV_TAG}" | sed 's|score/[0-9-]*-||')
-                    DELTA=$(node -e "
-                      const cur = parseFloat('${SCORE}');
-                      const prev = parseFloat('${PREV_SCORE}');
-                      if (isNaN(prev)) process.exit(1);
-                      const d = Math.round((cur - prev) * 100) / 100;
-                      process.stdout.write((d >= 0 ? '+' : '') + d);
-                    " 2>/dev/null) || DELTA=""
-                  fi
-
-                  TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
-                  if [ "${{ github.event_name }}" = "pull_request" ]; then
-                    PREFIX="score/pr-${{ github.event.pull_request.number }}"
-                  else
-                    PREFIX="score"
-                  fi
-
-                  # Tag name encodes the delta (level of improvement), not raw score
-                  if [ -n "${DELTA}" ]; then
-                    TAG="${PREFIX}/${TIMESTAMP}/${DELTA}"
-                    MSG="Score: ${SCORE} / 1150 (${DELTA} vs ${PREV_TAG}) — commit ${{ github.sha }}"
-                  else
-                    TAG="${PREFIX}/${TIMESTAMP}/first"
-                    MSG="Score: ${SCORE} / 1150 (first measurement) — commit ${{ github.sha }}"
-                  fi
-
-                  echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-                  echo "message=${MSG}" >> "$GITHUB_OUTPUT"
-                  echo "skip=false" >> "$GITHUB_OUTPUT"
-                  echo "Created tag name: ${TAG}"
-
-            - name: Create score tag
-              if: steps.score-tag.outputs.skip != 'true'
-              uses: rickstaa/action-create-tag@a1c7777fcb2fee4f19b0f283ba888afa11678b72 # v1.7.2
+            - name: Apply score delta label to PR
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
               with:
-                  tag: ${{ steps.score-tag.outputs.tag }}
-                  message: ${{ steps.score-tag.outputs.message }}
+                  script: |
+                      const fs = require('fs');
+                      if (!fs.existsSync('/tmp/scores.json')) {
+                        core.warning('scores.json not found, skipping label'); return;
+                      }
+                      const s = JSON.parse(fs.readFileSync('/tmp/scores.json', 'utf8'));
+                      const cur = s.grandTotal?.med;
+                      if (cur == null) { core.warning('No grand total'); return; }
+
+                      const r = v => Math.round(v * 100) / 100;
+                      const base = s.grandTotal?.base;
+                      let labelName, color;
+                      if (base != null && !isNaN(base)) {
+                        const d = r(cur - base);
+                        labelName = `score: ${d >= 0 ? '+' : ''}${d}`;
+                        color = d >= 0 ? '0e8a16' : 'd93f0b';
+                      } else {
+                        labelName = `score: ${r(cur)}`;
+                        color = '0075ca';
+                      }
+
+                      // Upsert the label definition in the repo
+                      try {
+                        await github.rest.issues.createLabel({
+                          ...context.repo, name: labelName, color,
+                        });
+                      } catch (e) {
+                        if (e.status === 422) {
+                          await github.rest.issues.updateLabel({
+                            ...context.repo, name: labelName, color,
+                          });
+                        } else throw e;
+                      }
+
+                      // Swap out any existing score: label on this PR
+                      const { data: current } = await github.rest.issues.listLabelsOnIssue({
+                        ...context.repo, issue_number: context.issue.number,
+                      });
+                      for (const l of current.filter(l => l.name.startsWith('score:'))) {
+                        await github.rest.issues.removeLabel({
+                          ...context.repo, issue_number: context.issue.number, name: l.name,
+                        });
+                      }
+                      await github.rest.issues.addLabels({
+                        ...context.repo, issue_number: context.issue.number, labels: [labelName],
+                      });
+                      core.info(`Applied label: ${labelName}`);
 
             # ------------------------------------------------------------------ #
             # 9. Upload all raw score files as artifact (for debugging)
