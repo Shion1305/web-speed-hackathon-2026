@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageTitle } from "@web-speed-hackathon-2026/client/src/components/application/PageTitle";
 import { CrokGate } from "@web-speed-hackathon-2026/client/src/components/crok/CrokGate";
@@ -12,6 +12,10 @@ type Props = {
 
 export const CrokContainer = ({ activeUser, authModalId }: Props) => {
   const [messages, setMessages] = useState<Models.ChatMessage[]>([]);
+
+  useEffect(() => {
+    void import("@web-speed-hackathon-2026/client/src/components/crok/RichMarkdown");
+  }, []);
 
   const sseOptions = useMemo(
     () => ({

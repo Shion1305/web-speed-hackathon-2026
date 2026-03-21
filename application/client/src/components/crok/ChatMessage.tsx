@@ -1,11 +1,5 @@
-import "katex/dist/katex.min.css";
-import { memo } from "react";
-import Markdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
+import { lazy, memo, Suspense } from "react";
 
-import { CodeBlock } from "@web-speed-hackathon-2026/client/src/components/crok/CodeBlock";
 import { TypingIndicator } from "@web-speed-hackathon-2026/client/src/components/crok/TypingIndicator";
 import { CrokLogo } from "@web-speed-hackathon-2026/client/src/components/foundation/CrokLogo";
 
@@ -13,6 +7,12 @@ interface Props {
   message: Models.ChatMessage;
   isStreaming?: boolean;
 }
+
+const RichMarkdown = lazy(() =>
+  import("@web-speed-hackathon-2026/client/src/components/crok/RichMarkdown").then((m) => ({
+    default: m.RichMarkdown,
+  })),
+);
 
 const UserMessage = ({ content }: { content: string }) => {
   return (
@@ -38,13 +38,9 @@ const AssistantMessage = ({ content, isStreaming = false }: { content: string; i
           ) : isStreaming ? (
             <p className="whitespace-pre-wrap">{content}</p>
           ) : (
-            <Markdown
-              components={{ pre: CodeBlock }}
-              rehypePlugins={[rehypeKatex]}
-              remarkPlugins={[remarkMath, remarkGfm]}
-            >
-              {content}
-            </Markdown>
+            <Suspense fallback={<p className="whitespace-pre-wrap">{content}</p>}>
+              <RichMarkdown content={content} />
+            </Suspense>
           )}
         </div>
       </div>

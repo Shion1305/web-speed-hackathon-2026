@@ -102,8 +102,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const STREAM_CHUNK_SIZE = 48;
-const STREAM_INTERVAL_MS = 16;
+const STREAM_CHUNK_SIZE = 256;
+const STREAM_INTERVAL_MS = 8;
 
 crokRouter.get("/crok", async (req, res) => {
   if (req.session.userId === undefined) {
