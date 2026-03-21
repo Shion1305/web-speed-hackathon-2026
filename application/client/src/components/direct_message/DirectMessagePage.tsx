@@ -22,7 +22,7 @@ interface Props {
   activeUser: Models.User;
   isPeerTyping: boolean;
   isSubmitting: boolean;
-  onTyping: () => void;
+  onTyping: (text: string) => void;
   onSubmit: (params: DirectMessageFormData) => Promise<void>;
 }
 
@@ -48,8 +48,9 @@ export const DirectMessagePage = ({
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
-      setText(event.target.value);
-      onTyping();
+      const nextText = event.target.value;
+      setText(nextText);
+      onTyping(nextText);
     },
     [onTyping],
   );
@@ -129,6 +130,10 @@ export const DirectMessagePage = ({
                   "flex flex-col w-full",
                   isActiveUserSend ? "items-end" : "items-start",
                 )}
+                style={{
+                  containIntrinsicSize: "auto 4rem",
+                  contentVisibility: "auto",
+                }}
               >
                 <p
                   className={classNames(
