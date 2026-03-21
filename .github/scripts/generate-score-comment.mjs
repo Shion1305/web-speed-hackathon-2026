@@ -40,37 +40,74 @@ if (runFiles.length === 0) {
 
 // ---------------------------------------------------------------------------
 // Parse a scoring tool output file
-// Returns: { targets: Map<name, { total, metrics: Map<key, value> }> }
+//
+// The scoring tool emits box-drawing tables like:
+//   │ テスト項目     │ CLS (25点) │ FCP (10点) │ … │ 合計 (100点) │
+//   ├───────…────────┼────────…───┼────────…───┼───┼──────────…───┤
+//   │ ホームを開く   │ 25.00      │ 9.20       │ … │ 53.70        │
+//   └───────…────────┴────────…───┴────────…───┴───┴──────────…───┘
+//
+// And a grand total line: "合計 808.40 / 1150.00"
 // ---------------------------------------------------------------------------
 function parseScoreOutput(text) {
   const targets = new Map();
 
-  // Extract table rows — lines like:  | テスト名 | 0.00 | 0.00 | ... |
-  // We process each table independently to know which columns are which.
-  const lines = text.split("\n");
+  // The box-drawing table rows may be split across physical log lines because
+  // CI log lines wrap. Reconstruct the logical lines by joining physical lines
+  // that don't start with a box-drawing border character.
+  const rawLines = text.split("\n");
+  const lines = [];
+  for (const raw of rawLines) {
+    const t = raw.trim();
+    // Box row starts with │, ├, ┌, └, or ─ sequences — collect cell rows (│)
+    if (t.startsWith("│")) {
+      lines.push(t);
+    } else if (lines.length > 0 && !t.startsWith("┌") && !t.startsWith("├") && !t.startsWith("└") && t !== "") {
+      // Continuation of a wrapped cell row — append to previous line
+      const last = lines[lines.length - 1];
+      if (last.startsWith("│")) {
+        lines[lines.length - 1] = last + t;
+        continue;
+      }
+      lines.push(t);
+    } else {
+      lines.push(t);
+    }
+  }
+
+  /**
+   * Split a box-drawing row like "│ cell1 │ cell2 │" into trimmed cell strings.
+   */
+  function splitBoxRow(line) {
+    return line
+      .split("│")
+      .map((c) => c.trim())
+      .filter((_, i, arr) => i > 0 && i < arr.length - 1);
+  }
 
   let headerCols = null;
+  // Track which section we're in based on markdown headings in the output
+  let currentSection = "standard"; // "standard" | "userflow"
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("|")) continue;
-
-    const cells = trimmed
-      .split("|")
-      .map((c) => c.trim())
-      .filter((_, i, arr) => i > 0 && i < arr.length - 1); // remove empty first/last
-
-    if (cells.length === 0) continue;
-
-    // Separator row
-    if (cells.every((c) => /^:?-+:?$/.test(c))) {
+    // Section headings come from the plain-text lines (not box rows)
+    if (line.includes("ユーザーフローテスト")) {
+      currentSection = "userflow";
+      continue;
+    }
+    if (line.includes("通常テスト")) {
+      currentSection = "standard";
       continue;
     }
 
+    if (!line.startsWith("│")) continue;
+
+    const cells = splitBoxRow(line);
+    if (cells.length === 0) continue;
+
     // Header row — first cell is "テスト項目"
     if (cells[0] === "テスト項目") {
-      // e.g. ["テスト項目", "CLS (25点)", "FCP (10点)", ..., "合計 (100点)"]
-      headerCols = cells.slice(1); // skip "テスト項目"
+      headerCols = cells.slice(1); // e.g. ["CLS (25点)", "FCP (10点)", ..., "合計 (100点)"]
       continue;
     }
 
@@ -79,25 +116,25 @@ function parseScoreOutput(text) {
       const name = cells[0];
       const values = cells.slice(1);
       const totalStr = values[values.length - 1];
-      const total = totalStr === "計測できません" ? null : parseFloat(totalStr);
+      const total = (totalStr === "計測できません" || totalStr === "-") ? null : parseFloat(totalStr);
 
       const metrics = new Map();
       for (let i = 0; i < headerCols.length - 1; i++) {
         const header = headerCols[i]; // e.g. "CLS (25点)"
-        const keyMatch = header.match(/^(\w+)/);
+        const keyMatch = header.match(/^([A-Za-z]+)/);
         if (keyMatch) {
           const key = keyMatch[1].toLowerCase();
-          const val = values[i] === "-" ? null : parseFloat(values[i]);
+          const val = (values[i] === "-" || values[i] === "") ? null : parseFloat(values[i]);
           metrics.set(key, val);
         }
       }
 
-      targets.set(name, { total, metrics });
+      targets.set(name, { total, metrics, section: currentSection });
     }
   }
 
-  // Extract overall total from "**合計 X.XX / Y.YY**"
-  const totalMatch = text.match(/\*\*合計\s+([\d.]+)\s*\/\s*([\d.]+)\*\*/);
+  // Extract overall total from "合計 808.40 / 1150.00"
+  const totalMatch = text.match(/^合計\s+([\d.]+)\s*\/\s*([\d.]+)/m);
   const grandTotal = totalMatch ? parseFloat(totalMatch[1]) : null;
   const grandMax = totalMatch ? parseFloat(totalMatch[2]) : null;
 
@@ -203,7 +240,8 @@ for (const name of allTargetNames) {
     }
   }
 
-  aggregated.set(name, { total: totalStats, metrics: metricsAgg });
+  const section = runResults.find((r) => r.targets.has(name))?.targets.get(name)?.section ?? "standard";
+  aggregated.set(name, { total: totalStats, metrics: metricsAgg, section });
 }
 
 // Grand totals across runs
@@ -238,13 +276,16 @@ if (jsonOutputFile) {
 
 // ---------------------------------------------------------------------------
 // Determine which targets belong to which section
-// Detect by checking if a target has INP metric (userFlow) or not (standard)
+// Use the section tag recorded during parsing from the first valid run.
 // ---------------------------------------------------------------------------
 const standardTargets = [];
 const userFlowTargets = [];
 
-for (const [name, { metrics }] of aggregated.entries()) {
-  if (metrics.has("inp")) {
+// Retrieve section info from first run that has each target
+for (const name of allTargetNames) {
+  const firstRun = runResults.find((r) => r.targets.has(name));
+  const section = firstRun?.targets.get(name)?.section ?? "standard";
+  if (section === "userflow") {
     userFlowTargets.push(name);
   } else {
     standardTargets.push(name);
