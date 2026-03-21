@@ -12,6 +12,9 @@ userRouter.get("/me", async (req, res) => {
   if (req.session.userId === undefined) {
     throw new httpErrors.Unauthorized();
   }
+  if (req.session.userSnapshot !== undefined) {
+    return res.status(200).type("application/json").send(req.session.userSnapshot);
+  }
 
   const cacheKey = `user:id:${req.session.userId}`;
   let user = cache.get<User>(cacheKey);
@@ -23,6 +26,7 @@ userRouter.get("/me", async (req, res) => {
     cache.set(cacheKey, user, TTL.USER);
   }
 
+  req.session.userSnapshot = JSON.parse(JSON.stringify(user)) as Record<string, unknown>;
   return res.status(200).type("application/json").send(user);
 });
 
@@ -51,6 +55,7 @@ userRouter.put("/me", async (req, res) => {
   }
   cache.deleteByPrefix("user:posts:");
   cache.deleteByPrefix("search:");
+  req.session.userSnapshot = JSON.parse(JSON.stringify(user)) as Record<string, unknown>;
 
   return res.status(200).type("application/json").send(user);
 });

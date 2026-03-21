@@ -8,6 +8,10 @@ import { cache, TTL } from "../../cache";
 
 export const authRouter = Router();
 
+function toUserSnapshot(user: User): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(user)) as Record<string, unknown>;
+}
+
 authRouter.post("/signup", async (req, res) => {
   try {
     const { id: userId } = await User.create(req.body);
@@ -15,6 +19,7 @@ authRouter.post("/signup", async (req, res) => {
 
     if (user !== null) {
       cache.set(`user:id:${userId}`, user, TTL.USER);
+      req.session.userSnapshot = toUserSnapshot(user);
     }
 
     req.session.userId = userId;
@@ -48,6 +53,7 @@ authRouter.post("/signin", async (req, res) => {
   const user = await User.findByPk(userForAuth.id);
   if (user !== null) {
     cache.set(`user:id:${userForAuth.id}`, user, TTL.USER);
+    req.session.userSnapshot = toUserSnapshot(user);
   }
   return res.status(200).type("application/json").send(user);
 });
@@ -57,5 +63,6 @@ authRouter.post("/signout", async (req, res) => {
     cache.delete(`user:id:${req.session.userId}`);
   }
   req.session.userId = undefined;
+  req.session.userSnapshot = undefined;
   return res.status(200).type("application/json").send({});
 });

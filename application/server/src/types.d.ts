@@ -2,6 +2,7 @@ import WebSocket from "ws";
 
 declare module "express-session" {
   interface SessionData {
+    userSnapshot?: Record<string, unknown> | undefined;
     userId?: string | undefined;
   }
 }
