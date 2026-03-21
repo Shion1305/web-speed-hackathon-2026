@@ -48,7 +48,7 @@ function buildPreloadHints(posts: any[]): string {
     const images = post.images;
     if (images && images.length > 0) {
       hints.push(
-        `<link rel="preload" href="/images/${images[0].id}.webp" as="image" fetchpriority="high">`,
+        `<link rel="preload" href="/images/${images[0].id}.avif" as="image" type="image/avif" fetchpriority="high">`,
       );
       break;
     }
