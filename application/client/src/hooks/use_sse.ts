@@ -22,10 +22,12 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
   const flushTimerIdRef = useRef<number | null>(null);
   const lastFlushAtRef = useRef(0);
 
+  const frameRef = useRef<number | null>(null);
+
   const flushContent = useCallback(
     (force: boolean) => {
       const now = performance.now();
-      if (!force && now - lastFlushAtRef.current < 120) {
+      if (!force && now - lastFlushAtRef.current < 80) {
         return;
       }
 
@@ -36,14 +38,14 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
   );
 
   const scheduleFlush = useCallback(() => {
-    if (flushTimerIdRef.current !== null) {
+    if (flushTimerIdRef.current !== null || frameRef.current !== null) {
       return;
     }
 
-    flushTimerIdRef.current = window.setTimeout(() => {
-      flushTimerIdRef.current = null;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
       flushContent(true);
-    }, 120);
+    });
   }, [flushContent]);
 
   const stop = useCallback(() => {
@@ -54,6 +56,10 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
     if (flushTimerIdRef.current !== null) {
       window.clearTimeout(flushTimerIdRef.current);
       flushTimerIdRef.current = null;
+    }
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
     }
     setIsStreaming(false);
   }, []);

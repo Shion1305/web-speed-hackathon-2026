@@ -1,5 +1,5 @@
-import { Helmet } from "react-helmet";
 import { ComponentPropsWithRef } from "react";
+import { Helmet } from "react-helmet";
 
 import { openDialog } from "@web-speed-hackathon-2026/client/src/utils/dialog_command";
 

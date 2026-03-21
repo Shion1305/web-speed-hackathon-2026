@@ -1,4 +1,11 @@
-import { ChangeEventHandler, FormEventHandler, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ChangeEventHandler,
+  FormEventHandler,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
 import { ModalErrorMessage } from "@web-speed-hackathon-2026/client/src/components/modal/ModalErrorMessage";
@@ -7,14 +14,12 @@ import { AttachFileInputButton } from "@web-speed-hackathon-2026/client/src/comp
 
 const MAX_UPLOAD_BYTES_LIMIT = 10 * 1024 * 1024;
 
-let imageConverterPromise:
-  | Promise<
-      [
-        typeof import("@web-speed-hackathon-2026/client/src/utils/convert_image"),
-        typeof import("@imagemagick/magick-wasm"),
-      ]
-    >
-  | null = null;
+let imageConverterPromise: Promise<
+  [
+    typeof import("@web-speed-hackathon-2026/client/src/utils/convert_image"),
+    typeof import("@imagemagick/magick-wasm"),
+  ]
+> | null = null;
 
 function loadImageConverter() {
   if (imageConverterPromise == null) {
@@ -59,13 +64,7 @@ function isAcceptableMovie(file: File): boolean {
   return file.type === "video/mp4" || hasExtension(file, ["mp4"]);
 }
 
-export const NewPostModalPage = ({
-  id,
-  hasError,
-  isLoading,
-  onResetError,
-  onSubmit,
-}: Props) => {
+export const NewPostModalPage = ({ id, hasError, isLoading, onResetError, onSubmit }: Props) => {
   const [params, setParams] = useState<SubmitParams>({
     images: [],
     movie: undefined,
@@ -117,13 +116,16 @@ export const NewPostModalPage = ({
     setIsConverting(false);
   }, []);
 
-  const handleChangeText = useCallback<ChangeEventHandler<HTMLTextAreaElement>>((ev) => {
-    const value = ev.currentTarget.value;
-    updateParams((current) => ({
-      ...current,
-      text: value,
-    }));
-  }, [updateParams]);
+  const handleChangeText = useCallback<ChangeEventHandler<HTMLTextAreaElement>>(
+    (ev) => {
+      const value = ev.currentTarget.value;
+      updateParams((current) => ({
+        ...current,
+        text: value,
+      }));
+    },
+    [updateParams],
+  );
 
   const handleChangeImages = useCallback<ChangeEventHandler<HTMLInputElement>>(
     (ev) => {
