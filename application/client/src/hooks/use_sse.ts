@@ -14,13 +14,14 @@ interface ReturnValues {
   reset: () => void;
 }
 
-const STREAM_FLUSH_INTERVAL_MS = 180;
+const STREAM_FLUSH_INTERVAL_MS = 260;
 
 export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
   const [content, setContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const contentRef = useRef("");
+  const renderedContentRef = useRef("");
   const flushTimerIdRef = useRef<number | null>(null);
   const lastFlushAtRef = useRef(0);
 
@@ -30,8 +31,12 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
       if (!force && now - lastFlushAtRef.current < STREAM_FLUSH_INTERVAL_MS) {
         return;
       }
+      if (contentRef.current === renderedContentRef.current) {
+        return;
+      }
 
       lastFlushAtRef.current = now;
+      renderedContentRef.current = contentRef.current;
       setContent(contentRef.current);
     },
     [setContent],
@@ -64,12 +69,14 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
     stop();
     setContent("");
     contentRef.current = "";
+    renderedContentRef.current = "";
   }, [stop]);
 
   const start = useCallback(
     (url: string) => {
       stop();
       contentRef.current = "";
+      renderedContentRef.current = "";
       lastFlushAtRef.current = 0;
       setContent("");
       setIsStreaming(true);
