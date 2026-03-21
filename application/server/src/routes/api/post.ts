@@ -90,9 +90,19 @@ postRouter.post("/posts", async (req, res) => {
   cache.deleteByPrefix("search:");
   cache.deleteByPrefix("user:posts:");
 
-  const post =
-    (await Post.unscoped().findOne(createPostPayloadQuery({ where: { id: createdPost.id } }))) ??
-    createdPost;
+  // Fast-return without an immediate DB re-read. The created instance already has id/timestamps
+  // and nested media payloads from the request body.
+  const post = createdPost.toJSON() as Record<string, unknown>;
+  const cachedUser = cache.get<unknown>(`user:id:${req.session.userId}`);
+  if (cachedUser !== undefined) {
+    post["user"] =
+      typeof cachedUser === "object" &&
+      cachedUser !== null &&
+      "toJSON" in cachedUser &&
+      typeof (cachedUser as { toJSON: unknown }).toJSON === "function"
+        ? (cachedUser as { toJSON: () => unknown }).toJSON()
+        : cachedUser;
+  }
 
   return res.status(200).type("application/json").send(post);
 });
