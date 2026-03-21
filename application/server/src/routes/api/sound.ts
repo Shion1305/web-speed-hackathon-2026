@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import { extractMetadataFromSound } from "@web-speed-hackathon-2026/server/src/utils/extract_metadata_from_sound";
 import {
   createCanonicalMedia,
+  createDerivativeMedia,
   getMediaPath,
   storeMediaSource,
 } from "@web-speed-hackathon-2026/server/src/utils/media_derivation";
@@ -44,23 +45,11 @@ soundRouter.post("/sounds", async (req, res) => {
     });
   };
 
-  if (type.ext === CANONICAL_EXT) {
-    await createCanonicalMedia(SOURCE_KIND, sourcePath, canonicalPath, metadata);
-    enqueueDerivative();
-  } else {
-    void mediaDerivationQueue.enqueue({
-      key: `${SOURCE_KIND}:${soundId}:canonical`,
-      run: async () => {
-        await createCanonicalMedia(
-          SOURCE_KIND,
-          sourcePath,
-          canonicalPath,
-          metadata,
-        );
-        enqueueDerivative();
-      },
-    });
-  }
+  // Always await canonical derivation synchronously so the MP3 file is
+  // available before we respond.  The OGG derivative can still be produced
+  // asynchronously via the queue.
+  await createCanonicalMedia(SOURCE_KIND, sourcePath, canonicalPath, metadata);
+  enqueueDerivative();
 
   return res.status(200).type("application/json").send({ artist, id: soundId, title });
 });
