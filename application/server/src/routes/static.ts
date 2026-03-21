@@ -41,7 +41,8 @@ const termsHtml = baseHtml.replace(
 );
 
 const POST_DETAIL_ROUTE = /^\/posts\/([a-f0-9-]{36})$/;
-const BOOTSTRAP_LIMIT = 30;
+// Keep this aligned with TimelineContainer's first-page limit.
+const BOOTSTRAP_LIMIT = 15;
 
 function serializeBootstrap(data: unknown): string {
   return JSON.stringify(data)
