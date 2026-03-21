@@ -32,6 +32,13 @@ try {
   // populated after client build
 }
 
+let termHtml = "";
+try {
+  termHtml = fs.readFileSync(path.join(CLIENT_DIST_PATH, "term.html"), "utf8");
+} catch {
+  // populated after client build
+}
+
 const POST_DETAIL_ROUTE = /^\/posts\/([a-f0-9-]{36})$/;
 const BOOTSTRAP_LIMIT = 30;
 
@@ -88,6 +95,14 @@ async function buildInjectedHtml(reqPath: string): Promise<string | null> {
   const scriptTag = `<script>window.__CAX_BOOTSTRAP__=${serializeBootstrap(bootstrapData)}</script>`;
   return baseHtml.replace("</head>", `${scriptTag}</head>`);
 }
+
+// Serve static term.html for /term — no JS/CSS bundle needed
+staticRouter.use((req, res, next) => {
+  if (req.method !== "GET" || req.path !== "/term" || !termHtml) return next();
+  res.setHeader("Content-Type", "text/html; charset=UTF-8");
+  res.setHeader("Cache-Control", "no-cache");
+  return res.send(termHtml);
+});
 
 // Serve bootstrapped HTML for SPA routes BEFORE history fallback
 staticRouter.use(async (req, res, next) => {
