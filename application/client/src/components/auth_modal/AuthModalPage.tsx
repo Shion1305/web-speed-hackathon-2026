@@ -1,7 +1,12 @@
 import { useForm, useWatch } from "react-hook-form";
 
 import { AuthFormData } from "@web-speed-hackathon-2026/client/src/auth/types";
-import { validate } from "@web-speed-hackathon-2026/client/src/auth/validation";
+import {
+  validate,
+  validateName,
+  validatePassword,
+  validateUsername,
+} from "@web-speed-hackathon-2026/client/src/auth/validation";
 import { FormInputField } from "@web-speed-hackathon-2026/client/src/components/foundation/FormInputField";
 import { Link } from "@web-speed-hackathon-2026/client/src/components/foundation/Link";
 import { ModalErrorMessage } from "@web-speed-hackathon-2026/client/src/components/modal/ModalErrorMessage";
@@ -57,10 +62,7 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, serverError }: Pr
           autoComplete="username"
           error={errors.username?.message}
           {...register("username", {
-            validate: (v) => {
-              const errs = validate({ username: v, password: "", type, name: "" });
-              return errs.username ?? true;
-            },
+            validate: (v) => validateUsername(v) ?? true,
           })}
         />
 
@@ -70,10 +72,7 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, serverError }: Pr
             autoComplete="nickname"
             error={errors.name?.message}
             {...register("name", {
-              validate: (v) => {
-                const errs = validate({ username: "", password: "", type, name: v ?? "" });
-                return errs.name ?? true;
-              },
+              validate: (v) => validateName(v, type) ?? true,
             })}
           />
         )}
@@ -84,10 +83,7 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, serverError }: Pr
           autoComplete={type === "signup" ? "new-password" : "current-password"}
           error={errors.password?.message}
           {...register("password", {
-            validate: (v) => {
-              const errs = validate({ username: "", password: v, type, name: "" });
-              return errs.password ?? true;
-            },
+            validate: (v) => validatePassword(v) ?? true,
           })}
         />
       </div>
