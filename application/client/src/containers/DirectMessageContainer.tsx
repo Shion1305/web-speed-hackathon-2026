@@ -20,7 +20,6 @@ interface DmTypingEvent {
 
 const TYPING_INDICATOR_DURATION_MS = 10 * 1000;
 const TYPING_EVENT_THROTTLE_MS = 1500;
-const OPTIMISTIC_DM_ID_PREFIX = "optimistic:";
 
 function mergeConversationMessage(
   conversation: Models.DirectMessageConversation | null,
@@ -74,70 +73,6 @@ function mergeConversationMessage(
   };
 }
 
-function replaceConversationMessage(
-  conversation: Models.DirectMessageConversation | null,
-  currentId: string,
-  nextMessage: Models.DirectMessage,
-): Models.DirectMessageConversation | null {
-  if (conversation == null) {
-    return conversation;
-  }
-
-  const index = conversation.messages.findIndex((item) => item.id === currentId);
-  if (index === -1) {
-    return mergeConversationMessage(conversation, nextMessage);
-  }
-
-  const messages = [...conversation.messages];
-  messages[index] = nextMessage;
-
-  return {
-    ...conversation,
-    messages,
-  };
-}
-
-function removeConversationMessage(
-  conversation: Models.DirectMessageConversation | null,
-  messageId: string,
-): Models.DirectMessageConversation | null {
-  if (conversation == null) {
-    return conversation;
-  }
-
-  return {
-    ...conversation,
-    messages: conversation.messages.filter((message) => message.id !== messageId),
-  };
-}
-
-function reconcileOwnMessage(
-  conversation: Models.DirectMessageConversation | null,
-  activeUserId: string | undefined,
-  message: Models.DirectMessage,
-): Models.DirectMessageConversation | null {
-  if (conversation == null) {
-    return conversation;
-  }
-
-  if (message.sender.id !== activeUserId) {
-    return mergeConversationMessage(conversation, message);
-  }
-
-  const optimisticMessage = conversation.messages.find(
-    (item) =>
-      item.id.startsWith(OPTIMISTIC_DM_ID_PREFIX) &&
-      item.sender.id === message.sender.id &&
-      item.body === message.body,
-  );
-
-  if (optimisticMessage == null) {
-    return mergeConversationMessage(conversation, message);
-  }
-
-  return replaceConversationMessage(conversation, optimisticMessage.id, message);
-}
-
 interface Props {
   activeUser: Models.User | null;
   authModalId: string;
@@ -187,32 +122,14 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
       }
 
       setIsSubmitting(true);
-      const optimisticId = `${OPTIMISTIC_DM_ID_PREFIX}${crypto.randomUUID()}`;
-      const optimisticMessage: Models.DirectMessage = {
-        id: optimisticId,
-        sender: activeUser,
-        body: params.body,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      setConversation((currentConversation) =>
-        mergeConversationMessage(currentConversation, optimisticMessage),
-      );
 
       try {
         const message = await sendJSON<Models.DirectMessage>(`/api/v1/dm/${conversationId}/messages`, {
           body: params.body,
         });
         setConversation((currentConversation) =>
-          replaceConversationMessage(currentConversation, optimisticId, message),
+          mergeConversationMessage(currentConversation, message),
         );
-      } catch (error) {
-        setConversation((currentConversation) =>
-          removeConversationMessage(currentConversation, optimisticId),
-        );
-        throw error;
       } finally {
         setIsSubmitting(false);
       }
@@ -231,9 +148,23 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
 
   useWs(`/api/v1/dm/${conversationId}`, (event: DmUpdateEvent | DmTypingEvent) => {
     if (event.type === "dm:conversation:message") {
-      setConversation((currentConversation) =>
-        reconcileOwnMessage(currentConversation, activeUser?.id, event.payload),
-      );
+      setConversation((currentConversation) => {
+        if (currentConversation == null) {
+          return currentConversation;
+        }
+
+        const alreadyHasMessage = currentConversation.messages.some(
+          (message) => message.id === event.payload.id,
+        );
+
+        // Own outgoing message will be reflected by POST response.
+        // Skip initial own WS echo so "sent" timing matches submit completion.
+        if (event.payload.sender.id === activeUser?.id && !alreadyHasMessage) {
+          return currentConversation;
+        }
+
+        return mergeConversationMessage(currentConversation, event.payload);
+      });
       if (event.payload.sender.id !== activeUser?.id) {
         setIsPeerTyping(false);
         if (peerTypingTimeoutRef.current !== null) {
