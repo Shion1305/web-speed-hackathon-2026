@@ -142,28 +142,17 @@ staticRouter.use(async (req, res, next) => {
   const requestedExt = path.extname(relativePath).slice(1).toLowerCase();
 
   const wantsTransform = width !== undefined || height !== undefined;
-  const resolvedImagePath = await resolveImagePath(relativePath);
-  if (resolvedImagePath === undefined) {
-    return next();
-  }
+  const contentType =
+    requestedExt === "webp"
+      ? "image/webp"
+      : requestedExt === "avif"
+        ? "image/avif"
+        : "image/jpeg";
 
-  if (wantsTransform) {
-    const cacheKey = `${relativePath}|${width ?? ""}x${height ?? ""}|${requestedExt}`;
-    const contentType =
-      requestedExt === "webp"
-        ? "image/webp"
-        : requestedExt === "avif"
-          ? "image/avif"
-          : "image/jpeg";
+  // Fast path: serve prebuilt profile image variant without resolving source path.
+  if (wantsTransform && width !== undefined && height !== undefined && width === height) {
     const profileImageMatch = relativePath.match(PROFILE_IMAGE_MEDIA_PATH);
-
-    if (
-      profileImageMatch !== null &&
-      width !== undefined &&
-      height !== undefined &&
-      width === height &&
-      OPTIMIZED_PROFILE_IMAGE_SIZES.has(width)
-    ) {
+    if (profileImageMatch !== null && OPTIMIZED_PROFILE_IMAGE_SIZES.has(width)) {
       const [, profileImageId] = profileImageMatch;
       const prebuiltPath = path.resolve(
         PROFILE_IMAGE_VARIANTS_DIR,
@@ -175,9 +164,18 @@ staticRouter.use(async (req, res, next) => {
         res.setHeader("Content-Type", contentType);
         return res.sendFile(prebuiltPath);
       } catch {
-        // If the prebuilt variant is not available, fall back to dynamic transformation.
+        // Prebuilt variant not available; fall through to dynamic transformation.
       }
     }
+  }
+
+  const resolvedImagePath = await resolveImagePath(relativePath);
+  if (resolvedImagePath === undefined) {
+    return next();
+  }
+
+  if (wantsTransform) {
+    const cacheKey = `${relativePath}|${width ?? ""}x${height ?? ""}|${requestedExt}`;
 
     const cached = transformedImageCache.get(cacheKey);
     if (cached !== undefined) {
