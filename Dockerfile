@@ -7,8 +7,8 @@ FROM node:${NODE_VERSION}-slim AS base
 
 LABEL fly_launch_runtime="Node.js"
 
-# Install dumb-init for proper signal handling
-RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && rm -rf /var/lib/apt/lists/*
+# Install dumb-init for proper signal handling and ffmpeg for media derivation
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init ffmpeg && rm -rf /var/lib/apt/lists/*
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -41,8 +41,8 @@ FROM node:${NODE_VERSION}-slim AS production
 
 LABEL fly_launch_runtime="Node.js"
 
-# Install dumb-init for proper signal handling
-RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && rm -rf /var/lib/apt/lists/*
+# Install dumb-init for proper signal handling and ffmpeg for media derivation
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
 RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
