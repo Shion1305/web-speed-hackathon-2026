@@ -200,6 +200,13 @@ staticRouter.use(async (req, res, next) => {
   return res.sendFile(resolvedImagePath);
 });
 
+const SOUND_POLL_RETRIES = 10;
+const SOUND_POLL_INTERVAL_MS = 200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 staticRouter.use(async (req, res, next) => {
   if (!["GET", "HEAD"].includes(req.method)) {
     return next();
@@ -210,9 +217,23 @@ staticRouter.use(async (req, res, next) => {
     return next();
   }
 
-  const resolvedPath = MOVIE_MEDIA_PATH.test(req.path)
-    ? await resolveMediaPath(relativePath, "movies")
-    : await resolveMediaPath(relativePath, "sounds");
+  const isSound = SOUND_MEDIA_PATH.test(req.path);
+
+  let resolvedPath = isSound
+    ? await resolveMediaPath(relativePath, "sounds")
+    : await resolveMediaPath(relativePath, "movies");
+
+  // For sounds, the canonical MP3 may still be in-flight (ffmpeg conversion
+  // started fire-and-forget in the POST handler).  Poll briefly before 404.
+  if (resolvedPath === undefined && isSound) {
+    for (let i = 0; i < SOUND_POLL_RETRIES; i++) {
+      await sleep(SOUND_POLL_INTERVAL_MS);
+      resolvedPath = await resolveMediaPath(relativePath, "sounds");
+      if (resolvedPath !== undefined) {
+        break;
+      }
+    }
+  }
 
   if (resolvedPath === undefined) {
     return next();

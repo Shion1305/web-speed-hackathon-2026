@@ -45,11 +45,12 @@ soundRouter.post("/sounds", async (req, res) => {
     });
   };
 
-  // Always await canonical derivation synchronously so the MP3 file is
-  // available before we respond.  The OGG derivative can still be produced
-  // asynchronously via the queue.
-  await createCanonicalMedia(SOURCE_KIND, sourcePath, canonicalPath, metadata);
-  enqueueDerivative();
+  // Start canonical derivation immediately (not via queue) but do NOT await
+  // it — the static file handler will poll briefly for the file if needed.
+  // The OGG derivative is enqueued after canonical finishes.
+  void createCanonicalMedia(SOURCE_KIND, sourcePath, canonicalPath, metadata).then(() => {
+    enqueueDerivative();
+  });
 
   return res.status(200).type("application/json").send({ artist, id: soundId, title });
 });
