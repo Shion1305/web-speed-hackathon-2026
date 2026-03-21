@@ -7,6 +7,7 @@ import { MovieArea } from "@web-speed-hackathon-2026/client/src/components/post/
 import { SoundArea } from "@web-speed-hackathon-2026/client/src/components/post/SoundArea";
 import { TranslatableText } from "@web-speed-hackathon-2026/client/src/components/post/TranslatableText";
 import { formatLongDate, toISOString } from "@web-speed-hackathon-2026/client/src/utils/date";
+import { primePrefetchedJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
 import { getProfileImagePath } from "@web-speed-hackathon-2026/client/src/utils/get_path";
 
 const isClickedInteractiveElement = (
@@ -50,6 +51,9 @@ export const TimelineItem = ({
   prioritizeRendering = false,
 }: Props) => {
   const navigate = useNavigate();
+  const postPath = `/posts/${post.id}`;
+  const postApiPath = `/api/v1/posts/${post.id}`;
+  const postState = { initialPost: post };
   const visibilityStyle = prioritizeRendering
     ? undefined
     : {
@@ -64,10 +68,11 @@ export const TimelineItem = ({
     (ev) => {
       const isSelectedText = document.getSelection()?.isCollapsed === false;
       if (!isClickedInteractiveElement(ev.target, ev.currentTarget) && !isSelectedText) {
-        navigate(`/posts/${post.id}`);
+        primePrefetchedJSON(postApiPath, post);
+        navigate(postPath, { state: postState });
       }
     },
-    [post, navigate],
+    [navigate, post, postApiPath, postPath, postState],
   );
 
   return (
@@ -99,7 +104,12 @@ export const TimelineItem = ({
               @{post.user.username}
             </Link>
             <span className="text-cax-text-muted pr-1">-</span>
-            <Link className="text-cax-text-muted pr-1 hover:underline" to={`/posts/${post.id}`}>
+            <Link
+              className="text-cax-text-muted pr-1 hover:underline"
+              to={postPath}
+              state={postState}
+              onClick={() => primePrefetchedJSON(postApiPath, post)}
+            >
               <time dateTime={toISOString(post.createdAt)}>
                 {formatLongDate(post.createdAt)}
               </time>

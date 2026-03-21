@@ -36,7 +36,7 @@ function getErrorMessage(err: unknown, type: "signin" | "signup"): string {
 
 export const AuthModalContainer = ({ id, onUpdateActiveUser }: Props) => {
   const ref = useRef<HTMLDialogElement>(null);
-  const [resetKey, setResetKey] = useState(0);
+  const [resetNonce, setResetNonce] = useState(0);
   const [serverError, setServerError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -44,14 +44,14 @@ export const AuthModalContainer = ({ id, onUpdateActiveUser }: Props) => {
     const element = ref.current;
 
     const handleClose = () => {
-      setResetKey((key) => key + 1);
+      setResetNonce((nonce) => nonce + 1);
       setServerError(undefined);
     };
     element.addEventListener("close", handleClose);
     return () => {
       element.removeEventListener("close", handleClose);
     };
-  }, [ref, setResetKey]);
+  }, [ref, setResetNonce]);
 
   const handleRequestCloseModal = useCallback(() => {
     ref.current?.close();
@@ -79,9 +79,9 @@ export const AuthModalContainer = ({ id, onUpdateActiveUser }: Props) => {
   return (
     <Modal id={id} ref={ref} closedby="any">
       <AuthModalPage
-        key={resetKey}
         onRequestCloseModal={handleRequestCloseModal}
         onSubmit={handleSubmit}
+        resetNonce={resetNonce}
         serverError={serverError}
       />
     </Modal>

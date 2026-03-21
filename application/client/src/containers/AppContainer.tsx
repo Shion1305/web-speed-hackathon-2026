@@ -120,28 +120,18 @@ export const AppContainer = () => {
 
   const authModalId = useId();
   const newPostModalId = useId();
-  const [isAuthModalMounted, setIsAuthModalMounted] = useState(false);
+  const [isAuthModalMounted] = useState(true);
   const [isNewPostModalMounted, setIsNewPostModalMounted] = useState(false);
   const [dialogOpenRequestId, setDialogOpenRequestId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (activeUser !== null && !isNewPostModalMounted) {
-      setIsNewPostModalMounted(true);
-    }
-  }, [activeUser, isNewPostModalMounted]);
-
   const handleDialogOpenRequest = useCallback(
     (dialogId: string) => {
-      if (dialogId === authModalId) {
-        setIsAuthModalMounted(true);
-        setDialogOpenRequestId(dialogId);
-      }
       if (dialogId === newPostModalId) {
         setIsNewPostModalMounted(true);
         setDialogOpenRequestId(dialogId);
       }
     },
-    [authModalId, newPostModalId],
+    [newPostModalId],
   );
 
   useEffect(() => {
