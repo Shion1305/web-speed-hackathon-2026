@@ -169,10 +169,13 @@ staticRouter.use(async (req, res, next) => {
         PROFILE_IMAGE_VARIANTS_DIR,
         `${profileImageId}-${width}.${requestedExt}`,
       );
-      if (fs.existsSync(prebuiltPath)) {
+      try {
+        await fs.promises.access(prebuiltPath, fs.constants.F_OK);
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         res.setHeader("Content-Type", contentType);
         return res.sendFile(prebuiltPath);
+      } catch {
+        // If the prebuilt variant is not available, fall back to dynamic transformation.
       }
     }
 
