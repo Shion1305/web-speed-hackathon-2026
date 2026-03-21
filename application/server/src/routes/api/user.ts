@@ -2,6 +2,10 @@ import { Router } from "express";
 import httpErrors from "http-errors";
 
 import { Post, User } from "@web-speed-hackathon-2026/server/src/models";
+import {
+  cacheCredential,
+  deleteCachedCredentialByUsername,
+} from "@web-speed-hackathon-2026/server/src/utils/auth_fast_cache";
 
 import { cache, TTL } from "../../cache";
 import { createPostPayloadQuery } from "./post_payloads";
@@ -45,9 +49,18 @@ userRouter.put("/me", async (req, res) => {
   cache.delete(`user:id:${req.session.userId}`);
   if (previousUsername) {
     cache.delete(`user:username:${previousUsername}`);
+    deleteCachedCredentialByUsername(previousUsername);
   }
   if (user.username) {
     cache.delete(`user:username:${user.username}`);
+    const passwordHash = user.getDataValue("password");
+    if (typeof passwordHash === "string") {
+      cacheCredential({
+        id: user.id,
+        passwordHash,
+        username: user.username,
+      });
+    }
   }
   cache.deleteByPrefix("user:posts:");
   cache.deleteByPrefix("search:");
