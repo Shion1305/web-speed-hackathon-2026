@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { consumePrefetchedJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
+
 const LIMIT = 30;
 
 function withPagination(apiPath: string, offset: number): string {
@@ -20,12 +22,29 @@ export function useInfiniteFetch<T>(
   apiPath: string,
   fetcher: (apiPath: string) => Promise<T[]>,
 ): ReturnValues<T> {
-  const internalRef = useRef({ hasMore: true, isLoading: false, offset: 0 });
+  // Try consuming bootstrap data for the first page
+  const bootstrapRef = useRef<T[] | null | undefined>(undefined);
+  if (bootstrapRef.current === undefined) {
+    if (apiPath === "") {
+      bootstrapRef.current = null;
+    } else {
+      const url = withPagination(apiPath, 0);
+      const cached = consumePrefetchedJSON<T[]>(url);
+      bootstrapRef.current = cached ?? null;
+    }
+  }
+  const initialData = bootstrapRef.current;
+
+  const internalRef = useRef({
+    hasMore: initialData ? initialData.length >= LIMIT : true,
+    isLoading: false,
+    offset: initialData ? initialData.length : 0,
+  });
 
   const [result, setResult] = useState<Omit<ReturnValues<T>, "fetchMore">>({
-    data: [],
+    data: initialData ?? [],
     error: null,
-    isLoading: true,
+    isLoading: initialData ? false : true,
   });
 
   const fetchMore = useCallback(() => {
@@ -73,6 +92,12 @@ export function useInfiniteFetch<T>(
   }, [apiPath, fetcher]);
 
   useEffect(() => {
+    // Skip initial fetch if we consumed bootstrap data
+    if (initialData != null) {
+      bootstrapRef.current = null;
+      return;
+    }
+
     setResult(() => ({
       data: [],
       error: null,
