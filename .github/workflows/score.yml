@@ -15,7 +15,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                run_index: [1, 2, 3]
+                run_index: [1, 2, 3, 4, 5]
 
         permissions:
             contents: read
@@ -146,7 +146,9 @@ jobs:
         name: Report Scores
         runs-on: ubuntu-24.04
         needs: score
-        if: always()
+        # Run even if some score matrix jobs failed, but skip on cancellation.
+        # `always()` would also run on cancellation which wastes a runner.
+        if: ${{ !cancelled() }}
         timeout-minutes: 15
 
         permissions:
@@ -163,7 +165,15 @@ jobs:
               uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
             # ------------------------------------------------------------------ #
-            # 2. Download all score run artifacts
+            # 2. Set up Node.js (needed to run generate-score-comment.mjs)
+            # ------------------------------------------------------------------ #
+            - name: Set up Node.js 24.14.0
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+              with:
+                  node-version: "24.14.0"
+
+            # ------------------------------------------------------------------ #
+            # 3. Download all score run artifacts
             # ------------------------------------------------------------------ #
             - name: Download score-run-1
               uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
@@ -186,16 +196,30 @@ jobs:
                   path: /tmp/runs/3
               continue-on-error: true
 
+            - name: Download score-run-4
+              uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+              with:
+                  name: score-run-4
+                  path: /tmp/runs/4
+              continue-on-error: true
+
+            - name: Download score-run-5
+              uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+              with:
+                  name: score-run-5
+                  path: /tmp/runs/5
+              continue-on-error: true
+
             - name: Collect run files
               run: |
-                  for i in 1 2 3; do
+                  for i in 1 2 3 4 5; do
                     if [ -s "/tmp/runs/${i}/score.txt" ]; then
                       cp "/tmp/runs/${i}/score.txt" "/tmp/score-${i}.txt"
                     fi
                   done
 
             # ------------------------------------------------------------------ #
-            # 3. Download baseline scores from latest main branch run
+            # 4. Download baseline scores from latest main branch run
             # ------------------------------------------------------------------ #
             - name: Download baseline scores artifact
               if: github.event_name == 'pull_request'
@@ -204,17 +228,20 @@ jobs:
                   name: score-baseline
                   branch: main
                   workflow: score.yml
+                  # Only use a fully completed main run, not one that is still
+                  # in progress (avoids racing against a concurrent main push).
+                  workflow_conclusion: success
                   path: /tmp/baseline
                   if_no_artifact_found: warn
               continue-on-error: true
 
             # ------------------------------------------------------------------ #
-            # 4. Generate rich score comment
+            # 5. Generate rich score comment
             # ------------------------------------------------------------------ #
             - name: Generate score comment
               run: |
                   RUN_FILES=""
-                  for i in 1 2 3; do
+                  for i in 1 2 3 4 5; do
                     if [ -s "/tmp/score-${i}.txt" ]; then
                       RUN_FILES="${RUN_FILES},/tmp/score-${i}.txt"
                     fi
@@ -234,7 +261,7 @@ jobs:
                     --json-output /tmp/scores.json
 
             # ------------------------------------------------------------------ #
-            # 5. Post score comment on PR / summary on push
+            # 6. Post score comment on PR / summary on push
             # ------------------------------------------------------------------ #
             - name: Post score results
               if: always()
@@ -271,7 +298,7 @@ jobs:
                   fi
 
             # ------------------------------------------------------------------ #
-            # 6. Save scores as baseline artifact (main branch only)
+            # 7. Save scores as baseline artifact (main branch only)
             # ------------------------------------------------------------------ #
             - name: Save baseline scores artifact
               if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -283,7 +310,7 @@ jobs:
                   if-no-files-found: warn
 
             # ------------------------------------------------------------------ #
-            # 7. Upload all raw score files as artifact (for debugging)
+            # 8. Upload all raw score files as artifact (for debugging)
             # ------------------------------------------------------------------ #
             - name: Upload raw score logs
               if: always()
@@ -294,6 +321,8 @@ jobs:
                       /tmp/score-1.txt
                       /tmp/score-2.txt
                       /tmp/score-3.txt
+                      /tmp/score-4.txt
+                      /tmp/score-5.txt
                       /tmp/scores.json
                       /tmp/comment.md
                   retention-days: 14
