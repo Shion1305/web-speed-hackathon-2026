@@ -121,7 +121,6 @@ export const NewPostModalContainer = ({ id }: Props) => {
         key={resetKey}
         id={dialogId}
         hasError={hasError}
-        isOpen
         isLoading={isLoading}
         onResetError={handleResetError}
         onSubmit={handleSubmit}

@@ -63,6 +63,7 @@ declare namespace Models {
     member: Models.User;
     messages: Array<Models.DirectMessage>;
     unreadCount?: number;
+    hasMoreBefore?: boolean;
   }
 
   interface ChatMessage {

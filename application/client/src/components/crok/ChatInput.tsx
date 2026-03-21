@@ -1,4 +1,3 @@
-import kuromoji, { type Tokenizer, type IpadicFeatures } from "kuromoji";
 import {
   useEffect,
   useLayoutEffect,
@@ -10,12 +9,6 @@ import {
 } from "react";
 
 import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
-import {
-  createSuggestionSearchIndex,
-  extractTokens,
-  searchSuggestionIndex,
-  type SuggestionSearchIndex,
-} from "@web-speed-hackathon-2026/client/src/utils/bm25_search";
 import { fetchJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
 
 interface Props {
@@ -23,27 +16,40 @@ interface Props {
   onSendMessage: (message: string) => void;
 }
 
-// トークン単位でハイライト
-function highlightMatchByTokens(text: string, queryTokens: string[]): React.ReactNode {
-  if (queryTokens.length === 0) return text;
+function getQueryTerms(query: string): string[] {
+  return query
+    .toLowerCase()
+    .normalize("NFKC")
+    .split(/[\s\u3000、。,.!?！？/\\-]+/u)
+    .map((term) => term.trim())
+    .filter((term) => term !== "");
+}
 
-  const lowerText = text.toLowerCase();
+function highlightMatchByQuery(text: string, query: string): React.ReactNode {
+  const queryTerms = getQueryTerms(query);
+  if (queryTerms.length === 0) {
+    return text;
+  }
 
-  // テキスト内でクエリトークンにマッチする範囲を収集
+  const lowerText = text.toLowerCase().normalize("NFKC");
   const ranges: { start: number; end: number }[] = [];
-  for (const token of queryTokens) {
-    let pos = 0;
-    while (pos < lowerText.length) {
-      const index = lowerText.indexOf(token, pos);
-      if (index === -1) break;
-      ranges.push({ start: index, end: index + token.length });
-      pos = index + 1;
+
+  for (const term of queryTerms) {
+    let position = 0;
+    while (position < lowerText.length) {
+      const index = lowerText.indexOf(term, position);
+      if (index === -1) {
+        break;
+      }
+      ranges.push({ start: index, end: index + term.length });
+      position = index + 1;
     }
   }
 
-  if (ranges.length === 0) return text;
+  if (ranges.length === 0) {
+    return text;
+  }
 
-  // 範囲をソートしてマージ
   ranges.sort((a, b) => a.start - b.start);
   const merged: { start: number; end: number }[] = [ranges[0]!];
   for (let i = 1; i < ranges.length; i++) {
@@ -77,123 +83,65 @@ function highlightMatchByTokens(text: string, queryTokens: string[]): React.Reac
   return <>{parts}</>;
 }
 
-function buildTokenizer(dicPath: string): Promise<Tokenizer<IpadicFeatures>> {
-  return new Promise((resolve, reject) => {
-    kuromoji.builder({ dicPath }).build((err, nextTokenizer) => {
-      if (err != null || nextTokenizer == null) {
-        reject(err ?? new Error("failed to build tokenizer"));
-        return;
-      }
-      resolve(nextTokenizer);
-    });
-  });
-}
-
 export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const [tokenizer, setTokenizer] = useState<Tokenizer<IpadicFeatures> | null>(null);
-  const [searchIndex, setSearchIndex] = useState<SuggestionSearchIndex | null>(null);
+  const requestIdRef = useRef(0);
+  const lastSelectedSuggestionRef = useRef<string | null>(null);
   const [inputValue, setInputValue] = useState("");
-  const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [queryTokens, setQueryTokens] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // サジェストが更新されたら一番下にスクロール
   useLayoutEffect(() => {
     if (suggestionsRef.current && showSuggestions) {
       suggestionsRef.current.scrollTop = suggestionsRef.current.scrollHeight;
     }
   }, [suggestions, showSuggestions]);
 
-  // 初回にkuromojiトークナイザーを構築
   useEffect(() => {
-    let mounted = true;
-
-    const init = async () => {
-      try {
-        const nextTokenizer = await buildTokenizer("/dicts");
-        if (mounted) {
-          setTokenizer(nextTokenizer);
-        }
-      } catch {
-        if (mounted) {
-          setTokenizer(null);
-        }
-      }
-    };
-    void init();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchJSON<{ suggestions: string[] }>("/api/v1/crok/suggestions")
-      .then(({ suggestions: candidates }) => {
-        if (!cancelled) {
-          setAllSuggestions(candidates);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAllSuggestions([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (tokenizer == null || allSuggestions.length === 0) {
-      return;
-    }
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      if (cancelled) {
-        return;
-      }
-      const nextIndex = createSuggestionSearchIndex(tokenizer, allSuggestions);
-      if (!cancelled) {
-        setSearchIndex(nextIndex);
-      }
-    }, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [allSuggestions, tokenizer]);
-
-  useEffect(() => {
-    if (!inputValue.trim()) {
+    const query = inputValue.trim();
+    if (query === "") {
       setSuggestions([]);
-      setQueryTokens([]);
+      setShowSuggestions(false);
+      lastSelectedSuggestionRef.current = null;
+      return;
+    }
+
+    if (lastSelectedSuggestionRef.current === query) {
       setShowSuggestions(false);
       return;
     }
 
-    if (tokenizer == null || searchIndex == null) {
-      setShowSuggestions(false);
-      return;
-    }
+    const requestId = ++requestIdRef.current;
+    setShowSuggestions(false);
+    setSuggestions([]);
 
     const timer = window.setTimeout(() => {
-      const tokens = extractTokens(tokenizer.tokenize(inputValue));
-      const results = searchSuggestionIndex(searchIndex, tokens);
+      void fetchJSON<{ suggestions: string[] }>(
+        `/api/v1/crok/suggestions?q=${encodeURIComponent(query)}`,
+      )
+        .then(({ suggestions: candidates }) => {
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
 
-      setQueryTokens(tokens);
-      setSuggestions(results);
-      setShowSuggestions(results.length > 0);
+          setSuggestions(candidates);
+          setShowSuggestions(candidates.length > 0);
+        })
+        .catch(() => {
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+
+          setSuggestions([]);
+          setShowSuggestions(false);
+        });
     }, 120);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [inputValue, searchIndex, tokenizer]);
+  }, [inputValue]);
 
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
@@ -211,14 +159,17 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
 
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
+    if (lastSelectedSuggestionRef.current !== null && value !== lastSelectedSuggestionRef.current) {
+      lastSelectedSuggestionRef.current = null;
+    }
     setInputValue(value);
     adjustTextareaHeight();
   };
 
   const handleSuggestionClick = (suggestion: string) => {
+    lastSelectedSuggestionRef.current = suggestion;
     setInputValue(suggestion);
     setSuggestions([]);
-    setQueryTokens([]);
     setShowSuggestions(false);
     window.requestAnimationFrame(adjustTextareaHeight);
   };
@@ -229,8 +180,8 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
       onSendMessage(inputValue.trim());
       setInputValue("");
       setSuggestions([]);
-      setQueryTokens([]);
       setShowSuggestions(false);
+      lastSelectedSuggestionRef.current = null;
       resetTextareaHeight();
     }
   };
@@ -259,7 +210,7 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
                 className="border-cax-border text-cax-text-muted hover:bg-cax-surface-subtle w-full border-b px-4 py-2 text-left text-sm last:border-b-0"
                 onClick={() => handleSuggestionClick(suggestion)}
               >
-                {highlightMatchByTokens(suggestion, queryTokens)}
+                {highlightMatchByQuery(suggestion, inputValue)}
               </button>
             ))}
           </div>

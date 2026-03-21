@@ -11,10 +11,91 @@ export const crokRouter = Router();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const response = fs.readFileSync(path.join(__dirname, "crok-response.md"), "utf-8");
+let suggestionQuestionsPromise: Promise<string[]> | null = null;
 
-crokRouter.get("/crok/suggestions", async (_req, res) => {
-  const suggestions = await QaSuggestion.findAll({ logging: false });
-  res.json({ suggestions: suggestions.map((s) => s.question) });
+async function loadSuggestionQuestions(): Promise<string[]> {
+  if (suggestionQuestionsPromise == null) {
+    suggestionQuestionsPromise = QaSuggestion.findAll({
+      attributes: ["question"],
+      logging: false,
+    }).then((suggestions) => suggestions.map((suggestion) => suggestion.question));
+  }
+
+  return suggestionQuestionsPromise;
+}
+
+function normalizeSuggestionText(value: string): string {
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function scoreSuggestion(question: string, query: string): number {
+  const normalizedQuestion = normalizeSuggestionText(question);
+  const normalizedQuery = normalizeSuggestionText(query);
+  if (normalizedQuery === "") {
+    return 0;
+  }
+
+  const compactQuestion = normalizedQuestion.replace(/\s+/g, "");
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
+  let score = 0;
+
+  if (normalizedQuestion === normalizedQuery) {
+    score += 1_000;
+  }
+  if (normalizedQuestion.startsWith(normalizedQuery)) {
+    score += 500;
+  }
+  if (compactQuestion.includes(compactQuery)) {
+    score += 200 + compactQuery.length;
+  }
+
+  const queryTerms = normalizedQuery.split(/[\s\u3000、。,.!?！？/\\-]+/u).filter(Boolean);
+  for (const term of queryTerms) {
+    if (compactQuestion.includes(term.replace(/\s+/g, ""))) {
+      score += term.length * 10;
+    }
+  }
+
+  if (score === 0) {
+    const queryChars = new Set(compactQuery);
+    let overlap = 0;
+    for (const char of new Set(compactQuestion)) {
+      if (queryChars.has(char)) {
+        overlap += 1;
+      }
+    }
+    score += overlap;
+  }
+
+  return score;
+}
+
+crokRouter.get("/crok/suggestions", async (req, res) => {
+  const suggestions = await loadSuggestionQuestions();
+  const rawQuery = req.query["q"];
+  const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
+
+  if (query === "") {
+    res.json({ suggestions });
+    return;
+  }
+
+  const rankedSuggestions = suggestions
+    .map((question, index) => ({
+      index,
+      question,
+      score: scoreSuggestion(question, query),
+    }))
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+      return left.index - right.index;
+    })
+    .slice(0, 10)
+    .map((suggestion) => suggestion.question);
+
+  res.json({ suggestions: rankedSuggestions });
 });
 
 function sleep(ms: number): Promise<void> {
