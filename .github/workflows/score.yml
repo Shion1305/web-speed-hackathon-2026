@@ -314,10 +314,9 @@ jobs:
                   if-no-files-found: warn
 
             # ------------------------------------------------------------------ #
-            # 8. Tag the commit with the median score (main branch only)
+            # 8. Tag the commit with the median score
             # ------------------------------------------------------------------ #
             - name: Tag commit with score
-              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
@@ -333,7 +332,11 @@ jobs:
                   " 2>/dev/null) || { echo "Could not read score from scores.json"; exit 0; }
 
                   TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
-                  TAG="score/${TIMESTAMP}-${SCORE}"
+                  if [ "${{ github.event_name }}" = "pull_request" ]; then
+                    TAG="score/pr-${{ github.event.pull_request.number }}/${TIMESTAMP}-${SCORE}"
+                  else
+                    TAG="score/${TIMESTAMP}-${SCORE}"
+                  fi
                   echo "Creating tag: ${TAG}"
 
                   git config user.name  "github-actions[bot]"
