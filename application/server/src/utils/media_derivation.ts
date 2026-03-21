@@ -139,6 +139,7 @@ async function createImageVariant(
   outputPath: string,
   outputExt: ImageOutputExt,
 ): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   if (getFileExtension(sourcePath) === outputExt) {
     await copyFileWithParent(sourcePath, outputPath);
     return;
@@ -162,11 +163,11 @@ async function createMovieVariant(
   outputPath: string,
   outputExt: MovieOutputExt,
 ): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   if (getFileExtension(sourcePath) === outputExt) {
     await copyFileWithParent(sourcePath, outputPath);
     return;
   }
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const baseArgs = [
     "-i",
@@ -216,11 +217,11 @@ async function createSoundVariant(
   outputExt: SoundOutputExt,
   metadata: SoundMetadata,
 ): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   if (getFileExtension(sourcePath) === outputExt) {
     await copyFileWithParent(sourcePath, outputPath);
     return;
   }
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const metadataArgs: string[] = [];
   if (metadata.artist !== undefined) {
