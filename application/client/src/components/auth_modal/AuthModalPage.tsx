@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { AuthFormData } from "@web-speed-hackathon-2026/client/src/auth/types";
@@ -31,6 +31,12 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, resetNonce, serve
   });
 
   const type = useWatch({ control, name: "type" }) ?? "signin";
+  const username = useWatch({ control, name: "username" }) ?? "";
+  const name = useWatch({ control, name: "name" }) ?? "";
+  const password = useWatch({ control, name: "password" }) ?? "";
+  const hasValidationError = useMemo(() => {
+    return Object.keys(validate({ name, password, type, username })).length > 0;
+  }, [name, password, type, username]);
   useEffect(() => {
     reset({ type: "signin", username: "", password: "", name: "" });
     clearErrors();
@@ -110,7 +116,7 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, resetNonce, serve
         </p>
       ) : null}
 
-      <ModalSubmitButton disabled={isSubmitting} loading={isSubmitting}>
+      <ModalSubmitButton disabled={isSubmitting || hasValidationError} loading={isSubmitting}>
         {type === "signin" ? "サインイン" : "登録する"}
       </ModalSubmitButton>
 
