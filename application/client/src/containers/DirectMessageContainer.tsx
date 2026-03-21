@@ -19,6 +19,59 @@ interface DmTypingEvent {
 }
 
 const TYPING_INDICATOR_DURATION_MS = 10 * 1000;
+const TYPING_EVENT_THROTTLE_MS = 1500;
+
+function mergeConversationMessage(
+  conversation: Models.DirectMessageConversation | null,
+  message: Models.DirectMessage,
+): Models.DirectMessageConversation | null {
+  if (conversation == null) {
+    return conversation;
+  }
+
+  const existingIndex = conversation.messages.findIndex(({ id }) => id === message.id);
+  let nextMessages = conversation.messages;
+
+  if (existingIndex !== -1) {
+    nextMessages = conversation.messages.map((currentMessage, index) =>
+      index === existingIndex
+        ? {
+            ...currentMessage,
+            ...message,
+          }
+        : currentMessage,
+    );
+  } else if (conversation.messages.length === 0) {
+    nextMessages = [message];
+  } else {
+    const nextCreatedAt = new Date(message.createdAt).getTime();
+    const firstCreatedAt = new Date(conversation.messages[0]!.createdAt).getTime();
+    const lastCreatedAt = new Date(
+      conversation.messages[conversation.messages.length - 1]!.createdAt,
+    ).getTime();
+
+    if (nextCreatedAt <= firstCreatedAt) {
+      nextMessages = [message, ...conversation.messages];
+    } else if (nextCreatedAt >= lastCreatedAt) {
+      nextMessages = [...conversation.messages, message];
+    } else {
+      const insertIndex = conversation.messages.findIndex(
+        (currentMessage) => new Date(currentMessage.createdAt).getTime() > nextCreatedAt,
+      );
+
+      nextMessages = [
+        ...conversation.messages.slice(0, insertIndex),
+        message,
+        ...conversation.messages.slice(insertIndex),
+      ];
+    }
+  }
+
+  return {
+    ...conversation,
+    messages: nextMessages,
+  };
+}
 
 interface Props {
   activeUser: Models.User | null;
@@ -34,6 +87,7 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
 
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const peerTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentAtRef = useRef(0);
 
   const loadConversation = useCallback(async () => {
     if (activeUser == null) {
@@ -63,35 +117,62 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
 
   const handleSubmit = useCallback(
     async (params: DirectMessageFormData) => {
+      if (activeUser == null) {
+        return;
+      }
+
       setIsSubmitting(true);
+
       try {
-        await sendJSON(`/api/v1/dm/${conversationId}/messages`, {
+        const message = await sendJSON<Models.DirectMessage>(`/api/v1/dm/${conversationId}/messages`, {
           body: params.body,
         });
-        loadConversation();
+        setConversation((currentConversation) =>
+          mergeConversationMessage(currentConversation, message),
+        );
       } finally {
         setIsSubmitting(false);
       }
     },
-    [conversationId, loadConversation],
+    [activeUser, conversationId],
   );
 
   const handleTyping = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastTypingSentAtRef.current < TYPING_EVENT_THROTTLE_MS) {
+      return;
+    }
+    lastTypingSentAtRef.current = now;
     void sendJSON(`/api/v1/dm/${conversationId}/typing`, {});
   }, [conversationId]);
 
   useWs(`/api/v1/dm/${conversationId}`, (event: DmUpdateEvent | DmTypingEvent) => {
     if (event.type === "dm:conversation:message") {
-      void loadConversation().then(() => {
-        if (event.payload.sender.id !== activeUser?.id) {
-          setIsPeerTyping(false);
-          if (peerTypingTimeoutRef.current !== null) {
-            clearTimeout(peerTypingTimeoutRef.current);
-          }
-          peerTypingTimeoutRef.current = null;
+      setConversation((currentConversation) => {
+        if (currentConversation == null) {
+          return currentConversation;
         }
+
+        const alreadyHasMessage = currentConversation.messages.some(
+          (message) => message.id === event.payload.id,
+        );
+
+        // Own outgoing message will be reflected by POST response.
+        // Skip initial own WS echo so "sent" timing matches submit completion.
+        if (event.payload.sender.id === activeUser?.id && !alreadyHasMessage) {
+          return currentConversation;
+        }
+
+        return mergeConversationMessage(currentConversation, event.payload);
       });
-      void sendRead();
+      if (event.payload.sender.id !== activeUser?.id) {
+        setIsPeerTyping(false);
+        if (peerTypingTimeoutRef.current !== null) {
+          clearTimeout(peerTypingTimeoutRef.current);
+        }
+        peerTypingTimeoutRef.current = null;
+        void sendRead();
+      }
     } else if (event.type === "dm:conversation:typing") {
       setIsPeerTyping(true);
       if (peerTypingTimeoutRef.current !== null) {

@@ -31,6 +31,14 @@ try {
 } catch {
   // populated after client build
 }
+const termsHtml = baseHtml.replace(
+  "</head>",
+  [
+    '<link rel="preload" href="/fonts/ReiNoAreMincho-Regular-Subset.woff2" as="font" type="font/woff2" crossorigin>',
+    '<link rel="preload" href="/fonts/ReiNoAreMincho-Heavy-Subset.woff2" as="font" type="font/woff2" crossorigin>',
+    "</head>",
+  ].join(""),
+);
 
 const POST_DETAIL_ROUTE = /^\/posts\/([a-f0-9-]{36})$/;
 // Keep this aligned with TimelineContainer's first-page limit.
@@ -100,6 +108,9 @@ staticRouter.use(async (req, res, next) => {
   if (req.path !== "/" && !POST_DETAIL_ROUTE.test(req.path)) {
     res.setHeader("Content-Type", "text/html; charset=UTF-8");
     res.setHeader("Cache-Control", "no-cache");
+    if (req.path === "/terms") {
+      return res.send(termsHtml);
+    }
     return res.send(baseHtml);
   }
 
