@@ -148,7 +148,7 @@ jobs:
             # ------------------------------------------------------------------ #
             - name: Download baseline scores artifact
               if: github.event_name == 'pull_request'
-              uses: dawidd6/action-download-artifact@20319c5641d997e8e3e89ff4333dd43bc21dff6c # v9
+              uses: dawidd6/action-download-artifact@07ab29fd4a977ae4d2b275087cf67563dfdf0295 # v9
               with:
                   name: score-baseline
                   branch: main
