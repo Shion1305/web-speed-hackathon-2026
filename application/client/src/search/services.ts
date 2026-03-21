@@ -44,8 +44,6 @@ export const isValidDate = (dateStr: string): boolean => {
   const date = new Date(Date.UTC(year, month - 1, day));
 
   return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() + 1 === month &&
-    date.getUTCDate() === day
+    date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day
   );
 };
