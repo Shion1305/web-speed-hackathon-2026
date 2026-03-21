@@ -14,6 +14,8 @@ interface ReturnValues {
   reset: () => void;
 }
 
+const STREAM_FLUSH_INTERVAL_MS = 180;
+
 export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
   const [content, setContent] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -25,7 +27,7 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
   const flushContent = useCallback(
     (force: boolean) => {
       const now = performance.now();
-      if (!force && now - lastFlushAtRef.current < 120) {
+      if (!force && now - lastFlushAtRef.current < STREAM_FLUSH_INTERVAL_MS) {
         return;
       }
 
@@ -43,7 +45,7 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
     flushTimerIdRef.current = window.setTimeout(() => {
       flushTimerIdRef.current = null;
       flushContent(true);
-    }, 120);
+    }, STREAM_FLUSH_INTERVAL_MS);
   }, [flushContent]);
 
   const stop = useCallback(() => {
@@ -87,6 +89,9 @@ export function useSSE<T>(options: SSEOptions<T>): ReturnValues {
         }
 
         const newContent = options.onMessage(data, contentRef.current);
+        if (newContent === contentRef.current) {
+          return;
+        }
         contentRef.current = newContent;
         flushContent(false);
         scheduleFlush();
