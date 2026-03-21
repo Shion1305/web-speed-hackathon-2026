@@ -55,11 +55,12 @@ export function getMoviePath(movieId: string): string {
   return `/movies/${movieId}.mp4`;
 }
 
+export function getMoviePosterPath(movieId: string): string {
+  return `/movies/${movieId}.jpg`;
+}
+
 export function getMovieSources(movieId: string): MediaSource[] {
-  return [
-    { src: `/movies/${movieId}.webm`, type: "video/webm" },
-    { src: getMoviePath(movieId), type: "video/mp4" },
-  ];
+  return [{ src: getMoviePath(movieId), type: "video/mp4" }];
 }
 
 export function getSoundPath(soundId: string): string {
@@ -75,4 +76,8 @@ export function getSoundSources(soundId: string): MediaSource[] {
 
 export function getProfileImagePath(profileImageId: string, size: number): string {
   return `/images/profiles/${profileImageId}.jpg?w=${size}&h=${size}`;
+}
+
+export function getWaveformPath(soundId: string): string {
+  return `/waveforms/${soundId}.json`;
 }
