@@ -6,6 +6,10 @@ on:
     pull_request:
         types: [opened, reopened, synchronize]
 
+concurrency:
+    group: score-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+    cancel-in-progress: true
+
 jobs:
     score:
         name: Build & Score (run ${{ matrix.run_index }} of 5)
@@ -152,7 +156,7 @@ jobs:
         timeout-minutes: 15
 
         permissions:
-            contents: read
+            contents: write
             issues: write
             pull-requests: write
             actions: read
@@ -310,7 +314,70 @@ jobs:
                   if-no-files-found: warn
 
             # ------------------------------------------------------------------ #
-            # 8. Upload all raw score files as artifact (for debugging)
+            # 8. Label the PR with the score delta (PR runs only)
+            # ------------------------------------------------------------------ #
+            - name: Apply score delta label to PR
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      if (!fs.existsSync('/tmp/scores.json')) {
+                        core.warning('scores.json not found, skipping label'); return;
+                      }
+                      const s = JSON.parse(fs.readFileSync('/tmp/scores.json', 'utf8'));
+                      const cur = s.grandTotal?.med;
+                      if (cur == null) { core.warning('No grand total'); return; }
+
+                      const baselineRaw = fs.existsSync('/tmp/baseline/scores.json')
+                        ? JSON.parse(fs.readFileSync('/tmp/baseline/scores.json', 'utf8'))
+                        : null;
+                      const base = baselineRaw?.grandTotal?.med ?? null;
+                      let labelName, color;
+                      if (base != null && !isNaN(base)) {
+                        const d = cur - base;
+                        // Thresholds (out of 1150 total)
+                        if      (d >=  50) { labelName = 'score: major improvement';  color = '0e8a16'; }
+                        else if (d >=  10) { labelName = 'score: improvement';         color = '2cbe4e'; }
+                        else if (d >=   1) { labelName = 'score: minor improvement';   color = 'a8f7b0'; }
+                        else if (d >  -1)  { labelName = 'score: no change';           color = 'e4e669'; }
+                        else if (d >  -10) { labelName = 'score: minor regression';    color = 'f9d0c4'; }
+                        else if (d >  -50) { labelName = 'score: regression';          color = 'e4735a'; }
+                        else               { labelName = 'score: major regression';    color = 'd93f0b'; }
+                      } else {
+                        labelName = 'score: no baseline';
+                        color = '0075ca';
+                      }
+
+                      // Upsert the label definition in the repo
+                      try {
+                        await github.rest.issues.createLabel({
+                          ...context.repo, name: labelName, color,
+                        });
+                      } catch (e) {
+                        if (e.status === 422) {
+                          await github.rest.issues.updateLabel({
+                            ...context.repo, name: labelName, color,
+                          });
+                        } else throw e;
+                      }
+
+                      // Swap out any existing score: label on this PR
+                      const { data: current } = await github.rest.issues.listLabelsOnIssue({
+                        ...context.repo, issue_number: context.issue.number,
+                      });
+                      for (const l of current.filter(l => l.name.startsWith('score:'))) {
+                        await github.rest.issues.removeLabel({
+                          ...context.repo, issue_number: context.issue.number, name: l.name,
+                        });
+                      }
+                      await github.rest.issues.addLabels({
+                        ...context.repo, issue_number: context.issue.number, labels: [labelName],
+                      });
+                      core.info(`Applied label: ${labelName}`);
+
+            # ------------------------------------------------------------------ #
+            # 9. Upload all raw score files as artifact (for debugging)
             # ------------------------------------------------------------------ #
             - name: Upload raw score logs
               if: always()

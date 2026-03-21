@@ -27,8 +27,13 @@ function loadImageConverter() {
   return imageConverterPromise;
 }
 
+interface SubmitImage {
+  alt: string;
+  file: File;
+}
+
 interface SubmitParams {
-  images: File[];
+  images: SubmitImage[];
   movie: File | undefined;
   sound: File | undefined;
   text: string;
@@ -52,11 +57,21 @@ function isAcceptableImage(file: File): boolean {
 }
 
 function isAcceptableSound(file: File): boolean {
-  return file.type === "audio/mpeg" || hasExtension(file, ["mp3"]);
+  return (
+    file.type === "audio/mpeg" ||
+    file.type === "audio/wav" ||
+    file.type === "audio/wave" ||
+    file.type === "audio/x-wav" ||
+    hasExtension(file, ["mp3", "wav", "wave"])
+  );
 }
 
 function isAcceptableMovie(file: File): boolean {
-  return file.type === "video/mp4" || hasExtension(file, ["mp4"]);
+  return (
+    file.type === "video/mp4" ||
+    file.type === "video/x-matroska" ||
+    hasExtension(file, ["mp4", "mkv"])
+  );
 }
 
 export const NewPostModalPage = ({
@@ -144,7 +159,7 @@ export const NewPostModalPage = ({
       if (!needsConversion) {
         updateParams((current) => ({
           ...current,
-          images: files,
+          images: files.map((file) => ({ alt: "", file })),
           movie: undefined,
           sound: undefined,
         }));
@@ -160,11 +175,11 @@ export const NewPostModalPage = ({
         const convertedFiles = await Promise.all(
           files.map(async (file) => {
             if (isAcceptableImage(file)) {
-              return file;
+              return { alt: "", file };
             }
 
-            const blob = await convertImage(file, { extension: MagickFormat.Jpg });
-            return new File([blob], "converted.jpg", { type: "image/jpeg" });
+            const { alt, blob } = await convertImage(file, { extension: MagickFormat.Jpg });
+            return { alt, file: new File([blob], "converted.jpg", { type: "image/jpeg" }) };
           }),
         );
 
