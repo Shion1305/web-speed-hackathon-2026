@@ -106,20 +106,31 @@ export const AppContainer = () => {
 
   const authModalId = useId();
   const newPostModalId = useId();
+  const [isAuthModalMounted, setIsAuthModalMounted] = useState(false);
   const [isNewPostModalMounted, setIsNewPostModalMounted] = useState(false);
 
   const handleDialogOpenRequest = useCallback(
     (dialogId: string) => {
+      if (dialogId === authModalId) {
+        setIsAuthModalMounted(true);
+      }
       if (dialogId === newPostModalId) {
         setIsNewPostModalMounted(true);
       }
     },
-    [newPostModalId],
+    [authModalId, newPostModalId],
   );
 
   useEffect(() => {
     return listenDialogOpenRequest(handleDialogOpenRequest);
   }, [handleDialogOpenRequest]);
+
+  useEffect(() => {
+    if (!isAuthModalMounted) {
+      return;
+    }
+    openDialog(authModalId);
+  }, [authModalId, isAuthModalMounted]);
 
   useEffect(() => {
     if (!isNewPostModalMounted) {
@@ -163,7 +174,9 @@ export const AppContainer = () => {
       </AppPage>
 
       <Suspense fallback={null}>
-        <AuthModalContainer id={authModalId} onUpdateActiveUser={setActiveUser} />
+        {isAuthModalMounted ? (
+          <AuthModalContainer id={authModalId} onUpdateActiveUser={setActiveUser} />
+        ) : null}
         {isNewPostModalMounted ? <NewPostModalContainer id={newPostModalId} /> : null}
       </Suspense>
     </>
