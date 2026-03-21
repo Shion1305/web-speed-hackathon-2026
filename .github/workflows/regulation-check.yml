@@ -5,6 +5,7 @@ on:
         branches: [main]
     pull_request:
         types: [opened, reopened, synchronize]
+    workflow_dispatch:
 
 concurrency:
     group: regulation-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
@@ -28,35 +29,26 @@ jobs:
                   git remote add upstream https://github.com/CyberAgentHack/web-speed-hackathon-2026.git || true
                   git fetch upstream main
 
-            - name: Set up Node.js 24.14.0
-              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+            - name: Set up Bun
+              uses: oven-sh/setup-bun@v2
               with:
-                  node-version: "24.14.0"
+                  bun-version: 1.3.11
 
-            - name: Set up pnpm 10.32.1
-              uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-              with:
-                  version: "10.32.1"
-
-            - name: Get pnpm store directory
-              id: pnpm-cache
-              run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-            - name: Cache pnpm store
+            - name: Cache Bun store
               uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
               with:
-                  path: ${{ steps.pnpm-cache.outputs.store }}
-                  key: pnpm-store-${{ runner.os }}-${{ hashFiles('application/pnpm-lock.yaml') }}
+                  path: ~/.bun/install/cache
+                  key: bun-store-${{ runner.os }}-${{ hashFiles('application/bun.lock', 'application/package.json') }}
                   restore-keys: |
-                      pnpm-store-${{ runner.os }}-
+                      bun-store-${{ runner.os }}-
 
             - name: Install application dependencies
               working-directory: application
-              run: pnpm install --frozen-lockfile
+              run: bun install --frozen-lockfile
 
             - name: Install Chrome and Playwright system dependencies
               working-directory: application/e2e
-              run: pnpm exec playwright install chrome --with-deps
+              run: bunx playwright install chrome --with-deps
 
             - name: Detect baseline commit hash
               run: |
@@ -120,13 +112,13 @@ jobs:
               working-directory: application/e2e
               env:
                   E2E_BASE_URL: http://localhost:18080
-              run: pnpm exec playwright test --update-snapshots --workers=2 --retries=2
+              run: bunx playwright test --update-snapshots --workers=2 --retries=2
 
             - name: Build current app
               working-directory: application
               env:
                   NODE_OPTIONS: "--max-old-space-size=4096"
-              run: pnpm run build
+              run: bun run build
 
             - name: Start current app
               working-directory: application
@@ -134,7 +126,7 @@ jobs:
                   PORT: "28080"
                   NODE_ENV: "production"
               run: |
-                  pnpm run start > /tmp/regulation-app.log 2>&1 &
+                  bun run start > /tmp/regulation-app.log 2>&1 &
                   echo "CURRENT_APP_PID=$!" >> $GITHUB_ENV
 
             - name: Wait for current app
@@ -155,7 +147,7 @@ jobs:
               working-directory: application/e2e
               env:
                   E2E_BASE_URL: http://localhost:28080
-              run: pnpm exec playwright test --workers=2 --retries=2
+              run: bunx playwright test --workers=2 --retries=2
 
             - name: Upload regulation debug artifacts
               if: failure()

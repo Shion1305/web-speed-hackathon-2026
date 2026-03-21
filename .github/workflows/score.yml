@@ -5,6 +5,7 @@ on:
         branches: [main]
     pull_request:
         types: [opened, reopened, synchronize]
+    workflow_dispatch:
 
 concurrency:
     group: score-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
@@ -32,33 +33,29 @@ jobs:
               uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
             # ------------------------------------------------------------------ #
-            # 2. Set up Node.js (exact version from mise.toml)
+            # 2. Set up Node.js (for scoring-tool)
             # ------------------------------------------------------------------ #
-            - name: Set up Node.js 24.14.0
-              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
               with:
-                  node-version: "24.14.0"
+                  node-version: "24"
 
             # ------------------------------------------------------------------ #
-            # 3. Set up pnpm (exact version matching packageManager field)
+            # 3. Set up pnpm (for scoring-tool)
             # ------------------------------------------------------------------ #
-            - name: Set up pnpm 10.32.1
-              uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v4
               with:
                   version: "10.32.1"
 
             # ------------------------------------------------------------------ #
             # 4. Cache pnpm store for scoring-tool
             # ------------------------------------------------------------------ #
-            - name: Get pnpm store directory
-              id: pnpm-cache
-              run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
-
             - name: Cache pnpm store
               uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
               with:
-                  path: ${{ steps.pnpm-cache.outputs.store }}
-                  key: pnpm-store-${{ runner.os }}-${{ hashFiles('scoring-tool/pnpm-lock.yaml') }}
+                  path: ~/.local/share/pnpm/store
+                  key: pnpm-store-${{ runner.os }}-${{ hashFiles('scoring-tool/pnpm-lock.yaml', 'scoring-tool/package.json') }}
                   restore-keys: |
                       pnpm-store-${{ runner.os }}-
 
@@ -90,18 +87,39 @@ jobs:
             - name: Wait for application server to be ready
               run: |
                   echo "Waiting for server on http://localhost:8080 ..."
-                  for i in $(seq 1 45); do
-                    if curl --silent --fail --max-time 3 http://localhost:8080/ > /dev/null 2>&1; then
+                  for i in $(seq 1 300); do
+                    set +e
+                    CURL_OUT=$(curl --verbose --max-time 3 http://localhost:8080/ 2>&1)
+                    CURL_STATUS=$?
+                    set -e
+                    if [ "${CURL_STATUS}" -eq 0 ]; then
                       echo "Server is ready (attempt ${i})"
                       exit 0
                     fi
-                    echo "  Attempt ${i}/45 - not ready yet, retrying in 2s ..."
+                    echo "  Attempt ${i}/300 - curl exit=${CURL_STATUS}"
+                    if [ $((i % 10)) -eq 0 ]; then
+                      echo "--- curl verbose output (last 30 lines) ---"
+                      echo "${CURL_OUT}" | tail -30
+                      echo "--- Container status ---"
+                      docker inspect wsh-app --format='status={{.State.Status}} running={{.State.Running}} exitCode={{.State.ExitCode}}' || true
+                      echo "--- Container logs (last 20) ---"
+                      docker logs --tail 20 wsh-app 2>&1 || true
+                    fi
                     sleep 2
                   done
-                  echo "ERROR: Server did not become ready within 90 seconds"
-                  echo "--- Last 50 lines of container log ---"
-                  docker logs --tail 50 wsh-app || true
+                  echo "ERROR: Server did not become ready within 600 seconds"
+                  echo "--- Last 100 lines of container log ---"
+                  docker logs --tail 100 wsh-app 2>&1 || true
                   exit 1
+
+            - name: Verify API is working
+              run: |
+                  echo "Testing /api/v1/posts endpoint..."
+                  set +e
+                  API_OUT=$(curl -s --max-time 10 http://localhost:8080/api/v1/posts 2>&1)
+                  echo "API response (first 500 chars): ${API_OUT:0:500}"
+                  echo "Container logs (last 30):"
+                  docker logs --tail 30 wsh-app 2>&1 || true
 
             # ------------------------------------------------------------------ #
             # 8. Install scoring-tool dependencies
@@ -115,7 +133,7 @@ jobs:
             # ------------------------------------------------------------------ #
             - name: Install Chrome and Playwright system dependencies
               working-directory: scoring-tool
-              run: npx playwright install chrome --with-deps
+              run: pnpm exec playwright install chrome --with-deps
 
             # ------------------------------------------------------------------ #
             # 10. Run scoring tool
