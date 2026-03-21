@@ -16,8 +16,8 @@ interface Props {
   onSendMessage: (message: string) => void;
 }
 
-const MIN_SUGGESTION_QUERY_LENGTH = 2;
-const SUGGESTION_DEBOUNCE_MS = 220;
+const MIN_SUGGESTION_QUERY_LENGTH = 3;
+const SUGGESTION_DEBOUNCE_MS = 280;
 
 function getQueryTerms(query: string): string[] {
   return query
@@ -89,6 +89,7 @@ function highlightMatchByQuery(text: string, query: string): React.ReactNode {
 export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const resizeFrameIdRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const lastSelectedSuggestionRef = useRef<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -153,6 +154,7 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
   }, [inputValue, isStreaming]);
 
   const adjustTextareaHeight = () => {
+    resizeFrameIdRef.current = null;
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto";
@@ -160,11 +162,30 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
     }
   };
 
+  const scheduleTextareaHeight = () => {
+    if (resizeFrameIdRef.current !== null) {
+      return;
+    }
+    resizeFrameIdRef.current = window.requestAnimationFrame(adjustTextareaHeight);
+  };
+
   const resetTextareaHeight = () => {
+    if (resizeFrameIdRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameIdRef.current);
+      resizeFrameIdRef.current = null;
+    }
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (resizeFrameIdRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameIdRef.current);
+      }
+    };
+  }, []);
 
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -172,7 +193,7 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
       lastSelectedSuggestionRef.current = null;
     }
     setInputValue(value);
-    adjustTextareaHeight();
+    scheduleTextareaHeight();
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -180,7 +201,7 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
     setInputValue(suggestion);
     setSuggestions([]);
     setShowSuggestions(false);
-    window.requestAnimationFrame(adjustTextareaHeight);
+    scheduleTextareaHeight();
   };
 
   const handleSubmit = (e: FormEvent) => {
