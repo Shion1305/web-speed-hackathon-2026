@@ -1,4 +1,11 @@
-import { ChangeEventHandler, FormEventHandler, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ChangeEventHandler,
+  FormEventHandler,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
 import { ModalErrorMessage } from "@web-speed-hackathon-2026/client/src/components/modal/ModalErrorMessage";
@@ -7,14 +14,12 @@ import { AttachFileInputButton } from "@web-speed-hackathon-2026/client/src/comp
 
 const MAX_UPLOAD_BYTES_LIMIT = 10 * 1024 * 1024;
 
-let imageConverterPromise:
-  | Promise<
-      [
-        typeof import("@web-speed-hackathon-2026/client/src/utils/convert_image"),
-        typeof import("@imagemagick/magick-wasm"),
-      ]
-    >
-  | null = null;
+let imageConverterPromise: Promise<
+  [
+    typeof import("@web-speed-hackathon-2026/client/src/utils/convert_image"),
+    typeof import("@imagemagick/magick-wasm"),
+  ]
+> | null = null;
 
 function loadImageConverter() {
   if (imageConverterPromise == null) {
@@ -27,8 +32,13 @@ function loadImageConverter() {
   return imageConverterPromise;
 }
 
+interface SubmitImage {
+  alt: string;
+  file: File;
+}
+
 interface SubmitParams {
-  images: File[];
+  images: SubmitImage[];
   movie: File | undefined;
   sound: File | undefined;
   text: string;
@@ -59,13 +69,7 @@ function isAcceptableMovie(file: File): boolean {
   return file.type === "video/mp4" || hasExtension(file, ["mp4"]);
 }
 
-export const NewPostModalPage = ({
-  id,
-  hasError,
-  isLoading,
-  onResetError,
-  onSubmit,
-}: Props) => {
+export const NewPostModalPage = ({ id, hasError, isLoading, onResetError, onSubmit }: Props) => {
   const [params, setParams] = useState<SubmitParams>({
     images: [],
     movie: undefined,
@@ -117,13 +121,16 @@ export const NewPostModalPage = ({
     setIsConverting(false);
   }, []);
 
-  const handleChangeText = useCallback<ChangeEventHandler<HTMLTextAreaElement>>((ev) => {
-    const value = ev.currentTarget.value;
-    updateParams((current) => ({
-      ...current,
-      text: value,
-    }));
-  }, [updateParams]);
+  const handleChangeText = useCallback<ChangeEventHandler<HTMLTextAreaElement>>(
+    (ev) => {
+      const value = ev.currentTarget.value;
+      updateParams((current) => ({
+        ...current,
+        text: value,
+      }));
+    },
+    [updateParams],
+  );
 
   const handleChangeImages = useCallback<ChangeEventHandler<HTMLInputElement>>(
     (ev) => {
@@ -144,7 +151,7 @@ export const NewPostModalPage = ({
       if (!needsConversion) {
         updateParams((current) => ({
           ...current,
-          images: files,
+          images: files.map((file) => ({ alt: "", file })),
           movie: undefined,
           sound: undefined,
         }));
@@ -160,11 +167,11 @@ export const NewPostModalPage = ({
         const convertedFiles = await Promise.all(
           files.map(async (file) => {
             if (isAcceptableImage(file)) {
-              return file;
+              return { alt: "", file };
             }
 
-            const blob = await convertImage(file, { extension: MagickFormat.Jpg });
-            return new File([blob], "converted.jpg", { type: "image/jpeg" });
+            const { alt, blob } = await convertImage(file, { extension: MagickFormat.Jpg });
+            return { alt, file: new File([blob], "converted.jpg", { type: "image/jpeg" }) };
           }),
         );
 
