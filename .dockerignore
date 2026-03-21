@@ -21,7 +21,8 @@ pnpm-debug.log*
 # Testing
 coverage
 .nyc_output
-e2e
+application/e2e/src
+application/e2e/test-results
 **/__tests__
 **/*.test.*
 **/*.spec.*
@@ -52,9 +53,13 @@ fly.toml
 # Application specific
 application/server/seeds
 application/server/upload
+application/server/src/server-bundle.js
 application/.oxfmtrc.json
 application/.oxlintrc.json
 application/.prettierignore
+application/pnpm-lock.yaml
+application/pnpm-workspace.yaml
+**/pnpm-lock.yaml
 
 # Docker
 Dockerfile*
