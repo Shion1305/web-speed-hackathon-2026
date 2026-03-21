@@ -16,6 +16,9 @@ interface Props {
   onSendMessage: (message: string) => void;
 }
 
+const MIN_SUGGESTION_QUERY_LENGTH = 2;
+const SUGGESTION_DEBOUNCE_MS = 220;
+
 function getQueryTerms(query: string): string[] {
   return query
     .toLowerCase()
@@ -99,8 +102,14 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
   }, [suggestions, showSuggestions]);
 
   useEffect(() => {
+    if (isStreaming) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
     const query = inputValue.trim();
-    if (query === "") {
+    if (query.length < MIN_SUGGESTION_QUERY_LENGTH) {
       setSuggestions([]);
       setShowSuggestions(false);
       lastSelectedSuggestionRef.current = null;
@@ -136,12 +145,12 @@ export const ChatInput = ({ isStreaming, onSendMessage }: Props) => {
           setSuggestions([]);
           setShowSuggestions(false);
         });
-    }, 120);
+    }, SUGGESTION_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [inputValue]);
+  }, [inputValue, isStreaming]);
 
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
