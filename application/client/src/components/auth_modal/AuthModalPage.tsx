@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { AuthFormData } from "@web-speed-hackathon-2026/client/src/auth/types";
@@ -34,9 +34,18 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, resetNonce, serve
   const username = useWatch({ control, name: "username" }) ?? "";
   const name = useWatch({ control, name: "name" }) ?? "";
   const password = useWatch({ control, name: "password" }) ?? "";
-  const hasValidationError = useMemo(() => {
-    return Object.keys(validate({ name, password, type, username })).length > 0;
-  }, [name, password, type, username]);
+  const normalizedUsername = username.trim();
+  const normalizedName = name.trim();
+  const normalizedPassword = password.trim();
+  const usernameFormatError =
+    normalizedUsername.length > 0 && !/^[a-zA-Z0-9_]*$/.test(normalizedUsername)
+      ? "ユーザー名に使用できるのは英数字とアンダースコア(_)のみです"
+      : undefined;
+  const isSubmitDisabled =
+    isSubmitting ||
+    normalizedUsername.length === 0 ||
+    normalizedPassword.length === 0 ||
+    (type === "signup" && normalizedName.length === 0);
   useEffect(() => {
     reset({ type: "signin", username: "", password: "", name: "" });
     clearErrors();
@@ -85,7 +94,7 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, resetNonce, serve
           label="ユーザー名"
           leftItem={<span className="text-cax-text-subtle leading-none">@</span>}
           autoComplete="username"
-          error={errors.username?.message}
+          error={errors.username?.message ?? usernameFormatError}
           {...register("username")}
         />
 
@@ -116,7 +125,7 @@ export const AuthModalPage = ({ onRequestCloseModal, onSubmit, resetNonce, serve
         </p>
       ) : null}
 
-      <ModalSubmitButton disabled={isSubmitting || hasValidationError} loading={isSubmitting}>
+      <ModalSubmitButton disabled={isSubmitDisabled} loading={isSubmitting}>
         {type === "signin" ? "サインイン" : "登録する"}
       </ModalSubmitButton>
 
