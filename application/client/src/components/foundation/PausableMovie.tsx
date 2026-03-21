@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 
 import { AspectRatioBox } from "@web-speed-hackathon-2026/client/src/components/foundation/AspectRatioBox";
 import { useNearViewport } from "@web-speed-hackathon-2026/client/src/hooks/use_near_viewport";
@@ -36,17 +36,15 @@ export const PausableMovie = ({
     }
     canvas.width = movie.videoWidth;
     canvas.height = movie.videoHeight;
-    setIsMovieReady(true);
   }, []);
 
-  const [isMovieReady, setIsMovieReady] = useState(false);
   const handleClick = useCallback(() => {
     if (!interactive) {
       return;
     }
 
     const movie = movieRef.current;
-    if (!isMovieReady || movie == null) {
+    if (movie == null) {
       return;
     }
     if (movie.paused) {
@@ -54,7 +52,7 @@ export const PausableMovie = ({
       return;
     }
     movie.pause();
-  }, [interactive, isMovieReady]);
+  }, [interactive]);
 
   return (
     <AspectRatioBox aspectHeight={1} aspectWidth={1}>
@@ -73,7 +71,7 @@ export const PausableMovie = ({
         />
         <video
           ref={movieRef}
-          autoPlay={true}
+          autoPlay={prioritizeLoad}
           className="h-full w-full object-cover"
           loop={true}
           muted={true}

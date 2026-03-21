@@ -4,28 +4,9 @@ import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components
 import { ModalErrorMessage } from "@web-speed-hackathon-2026/client/src/components/modal/ModalErrorMessage";
 import { ModalSubmitButton } from "@web-speed-hackathon-2026/client/src/components/modal/ModalSubmitButton";
 import { AttachFileInputButton } from "@web-speed-hackathon-2026/client/src/components/new_post_modal/AttachFileInputButton";
+import { extractAltFromImageFile } from "@web-speed-hackathon-2026/client/src/utils/extract_alt_from_image";
 
 const MAX_UPLOAD_BYTES_LIMIT = 10 * 1024 * 1024;
-
-let imageConverterPromise:
-  | Promise<
-      [
-        typeof import("@web-speed-hackathon-2026/client/src/utils/convert_image"),
-        typeof import("@imagemagick/magick-wasm"),
-      ]
-    >
-  | null = null;
-
-function loadImageConverter() {
-  if (imageConverterPromise == null) {
-    imageConverterPromise = Promise.all([
-      import("@web-speed-hackathon-2026/client/src/utils/convert_image"),
-      import("@imagemagick/magick-wasm"),
-    ]);
-  }
-
-  return imageConverterPromise;
-}
 
 interface SubmitImage {
   alt: string;
@@ -53,7 +34,10 @@ function hasExtension(file: File, extensions: string[]): boolean {
 }
 
 function isAcceptableImage(file: File): boolean {
-  return file.type === "image/jpeg" || hasExtension(file, ["jpg", "jpeg"]);
+  return (
+    file.type.startsWith("image/") ||
+    hasExtension(file, ["jpg", "jpeg", "png", "gif", "webp", "avif", "tif", "tiff"])
+  );
 }
 
 function isAcceptableSound(file: File): boolean {
@@ -106,13 +90,17 @@ export const NewPostModalPage = ({
     };
   }, []);
 
-  const updateParams = useCallback((updater: (current: SubmitParams) => SubmitParams) => {
-    setParams((current) => {
-      const next = updater(current);
-      paramsRef.current = next;
-      return next;
-    });
+  const commitParams = useCallback((next: SubmitParams) => {
+    paramsRef.current = next;
+    setParams(next);
   }, []);
+
+  const updateParams = useCallback(
+    (updater: (current: SubmitParams) => SubmitParams) => {
+      commitParams(updater(paramsRef.current));
+    },
+    [commitParams],
+  );
 
   const beginSelection = useCallback(() => {
     selectionVersionRef.current += 1;
@@ -155,14 +143,9 @@ export const NewPostModalPage = ({
         return;
       }
 
-      const needsConversion = files.some((file) => isAcceptableImage(file) !== true);
-      if (!needsConversion) {
-        updateParams((current) => ({
-          ...current,
-          images: files.map((file) => ({ alt: "", file })),
-          movie: undefined,
-          sound: undefined,
-        }));
+      const allAcceptable = files.every((file) => isAcceptableImage(file));
+      if (!allAcceptable) {
+        setHasFileError(true);
         return;
       }
 
@@ -170,30 +153,24 @@ export const NewPostModalPage = ({
         setIsConverting(true);
       }
 
-      const pending = (async () => {
-        const [{ convertImage }, { MagickFormat }] = await loadImageConverter();
-        const convertedFiles = await Promise.all(
-          files.map(async (file) => {
-            if (isAcceptableImage(file)) {
-              return { alt: "", file };
-            }
-
-            const { alt, blob } = await convertImage(file, { extension: MagickFormat.Jpg });
-            return { alt, file: new File([blob], "converted.jpg", { type: "image/jpeg" }) };
-          }),
-        );
-
+      const pending = Promise.all(
+        files.map(async (file) => ({
+          alt: await extractAltFromImageFile(file),
+          file,
+        })),
+      )
+        .then((images) => {
         if (!mountedRef.current || selectionVersionRef.current !== version) {
           return;
         }
 
         updateParams((current) => ({
           ...current,
-          images: convertedFiles,
+          images,
           movie: undefined,
           sound: undefined,
         }));
-      })()
+      })
         .catch(() => {
           if (mountedRef.current && selectionVersionRef.current === version) {
             setHasFileError(true);

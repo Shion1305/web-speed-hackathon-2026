@@ -49,10 +49,11 @@ async function sendNewPost({ images, movie, sound, text }: SubmitParams): Promis
 }
 
 interface Props {
+  activeUser: Models.User | null;
   id: string;
 }
 
-export const NewPostModalContainer = ({ id }: Props) => {
+export const NewPostModalContainer = ({ activeUser, id }: Props) => {
   const dialogId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const [resetKey, setResetKey] = useState(0);
@@ -86,10 +87,19 @@ export const NewPostModalContainer = ({ id }: Props) => {
       try {
         setIsLoading(true);
         const post = await sendNewPost(params);
+        const optimisticPost =
+          activeUser === null
+            ? undefined
+            : ({
+                ...post,
+                user: activeUser,
+              } as Models.Post);
         const postPath = `/api/v1/posts/${post.id}`;
         void prefetchJSON(postPath);
         ref.current?.close();
-        navigate(`/posts/${post.id}`);
+        navigate(`/posts/${post.id}`, {
+          state: optimisticPost === undefined ? undefined : { initialPost: optimisticPost },
+        });
       } catch {
         setHasError(true);
       } finally {
