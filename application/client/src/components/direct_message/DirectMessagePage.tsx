@@ -37,7 +37,7 @@ export const DirectMessagePage = ({
   onSubmit,
 }: Props) => {
   const formRef = useRef<HTMLFormElement>(null);
-  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const scrollHeightRef = useRef(0);
   const textAreaId = useId();
 
   const peer =
@@ -77,18 +77,16 @@ export const DirectMessagePage = ({
   );
 
   useEffect(() => {
-    const target = messagesScrollRef.current;
-    if (target == null) {
-      return;
-    }
-
-    const id = requestAnimationFrame(() => {
-      target.scrollTop = target.scrollHeight;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height ?? document.body.scrollHeight;
+      if (height !== scrollHeightRef.current) {
+        scrollHeightRef.current = height;
+        window.scrollTo(0, height);
+      }
     });
-    return () => {
-      cancelAnimationFrame(id);
-    };
-  }, [conversation.messages.length, isPeerTyping]);
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  }, []);
 
   const renderedMessages = useMemo(() => {
     return conversation.messages.map((message) => {
@@ -155,10 +153,7 @@ export const DirectMessagePage = ({
         </div>
       </header>
 
-      <div
-        className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8"
-        ref={messagesScrollRef}
-      >
+      <div className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8">
         {conversation.messages.length === 0 && (
           <p className="text-cax-text-muted text-center text-sm">
             まだメッセージはありません。最初のメッセージを送信してみましょう。
