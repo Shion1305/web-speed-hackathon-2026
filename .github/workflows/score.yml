@@ -314,7 +314,7 @@ jobs:
                   if-no-files-found: warn
 
             # ------------------------------------------------------------------ #
-            # 8. Tag the commit with the median score
+            # 8. Tag the commit with the median score (and delta vs previous)
             # ------------------------------------------------------------------ #
             - name: Tag commit with score
               env:
@@ -331,6 +331,22 @@ jobs:
                     process.stdout.write(String(Math.round(med * 100) / 100));
                   " 2>/dev/null) || { echo "Could not read score from scores.json"; exit 0; }
 
+                  # Fetch all tags so we can find the previous score
+                  git fetch --tags --quiet 2>/dev/null || true
+
+                  # Find the latest main-branch score tag (score/TIMESTAMP-SCORE, not pr/)
+                  PREV_TAG=$(git tag -l 'score/[0-9]*' | sort -r | head -1)
+                  if [ -n "${PREV_TAG}" ]; then
+                    PREV_SCORE=$(echo "${PREV_TAG}" | sed 's|score/[0-9]*-[0-9]*-[0-9]*-[0-9]*-[0-9]*-[0-9]*-||')
+                    DELTA=$(node -e "
+                      const cur = parseFloat('${SCORE}');
+                      const prev = parseFloat('${PREV_SCORE}');
+                      if (isNaN(prev)) process.exit(1);
+                      const d = Math.round((cur - prev) * 100) / 100;
+                      process.stdout.write((d >= 0 ? '+' : '') + d);
+                    " 2>/dev/null) || DELTA=""
+                  fi
+
                   TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
                   if [ "${{ github.event_name }}" = "pull_request" ]; then
                     TAG="score/pr-${{ github.event.pull_request.number }}/${TIMESTAMP}-${SCORE}"
@@ -339,9 +355,15 @@ jobs:
                   fi
                   echo "Creating tag: ${TAG}"
 
+                  if [ -n "${DELTA}" ]; then
+                    MSG="Score: ${SCORE} / 1150 (${DELTA} vs ${PREV_TAG}) at ${TIMESTAMP} — commit ${{ github.sha }}"
+                  else
+                    MSG="Score: ${SCORE} / 1150 at ${TIMESTAMP} — commit ${{ github.sha }}"
+                  fi
+
                   git config user.name  "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git tag -a "${TAG}" "${{ github.sha }}" -m "Score: ${SCORE} / 1150 at ${TIMESTAMP} (commit ${{ github.sha }})"
+                  git tag -a "${TAG}" "${{ github.sha }}" -m "${MSG}"
                   git push origin "${TAG}"
 
             # ------------------------------------------------------------------ #
