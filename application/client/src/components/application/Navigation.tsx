@@ -17,17 +17,20 @@ export const Navigation = ({ activeUser, authModalId, newPostModalId, onLogout }
       <div className="relative grid grid-flow-col items-center justify-evenly lg:fixed lg:flex lg:h-full lg:w-48 lg:flex-col lg:justify-between lg:p-2">
         <ul className="grid grid-flow-col items-center justify-evenly lg:grid-flow-row lg:auto-rows-min lg:justify-start lg:gap-2">
           <NavigationItem
+            key="home"
             href="/"
             icon={<FontAwesomeIcon iconType="home" styleType="solid" />}
             text="ホーム"
           />
           <NavigationItem
+            key="search"
             href="/search"
             icon={<FontAwesomeIcon iconType="search" styleType="solid" />}
             text="検索"
           />
           {activeUser !== null ? (
             <NavigationItem
+              key="dm"
               badge={<DirectMessageNotificationBadge />}
               href="/dm"
               icon={<FontAwesomeIcon iconType="envelope" styleType="solid" />}
@@ -36,6 +39,7 @@ export const Navigation = ({ activeUser, authModalId, newPostModalId, onLogout }
           ) : null}
           {activeUser !== null ? (
             <NavigationItem
+              key="new-post"
               icon={<FontAwesomeIcon iconType="edit" styleType="solid" />}
               command="show-modal"
               commandfor={newPostModalId}
@@ -44,6 +48,7 @@ export const Navigation = ({ activeUser, authModalId, newPostModalId, onLogout }
           ) : null}
           {activeUser !== null ? (
             <NavigationItem
+              key="profile"
               href={`/users/${activeUser.username}`}
               icon={<FontAwesomeIcon iconType="user" styleType="solid" />}
               text="マイページ"
@@ -51,6 +56,7 @@ export const Navigation = ({ activeUser, authModalId, newPostModalId, onLogout }
           ) : null}
           {activeUser === null ? (
             <NavigationItem
+              key="signin"
               icon={<FontAwesomeIcon iconType="sign-in-alt" styleType="solid" />}
               text="サインイン"
               command="show-modal"
@@ -59,12 +65,14 @@ export const Navigation = ({ activeUser, authModalId, newPostModalId, onLogout }
           ) : null}
           {activeUser !== null ? (
             <NavigationItem
+              key="crok"
               href="/crok"
               icon={<CrokLogo className="h-[30px] w-[30px]" />}
               text="Crok"
             />
           ) : null}
           <NavigationItem
+            key="terms"
             href="/terms"
             icon={<FontAwesomeIcon iconType="balance-scale" styleType="solid" />}
             text="利用規約"

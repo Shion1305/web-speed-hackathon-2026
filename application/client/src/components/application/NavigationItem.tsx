@@ -19,7 +19,9 @@ export const NavigationItem = ({ badge, href, icon, command, commandfor, text }:
 
   const handleClick: React.ComponentPropsWithRef<"button">["onClick"] = (event) => {
     if (event.defaultPrevented) return;
-    runDialogCommand(command, commandfor);
+    const nextCommand = event.currentTarget.dataset["command"] ?? command;
+    const nextCommandFor = event.currentTarget.dataset["commandfor"] ?? commandfor;
+    runDialogCommand(nextCommand, nextCommandFor);
   };
 
   return (
@@ -41,6 +43,8 @@ export const NavigationItem = ({ badge, href, icon, command, commandfor, text }:
       ) : (
         <button
           className="hover:bg-cax-brand-soft flex h-12 w-12 flex-col items-center justify-center rounded-full sm:h-auto sm:w-24 sm:rounded-sm sm:px-2 lg:h-auto lg:w-auto lg:flex-row lg:justify-start lg:rounded-full lg:px-4 lg:py-2"
+          data-command={command}
+          data-commandfor={commandfor}
           type="button"
           onClick={handleClick}
         >

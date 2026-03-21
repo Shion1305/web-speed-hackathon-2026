@@ -1,5 +1,6 @@
 const MAX_DIALOG_LOOKUP_ATTEMPTS = 60;
 const DIALOG_OPEN_REQUEST_EVENT_NAME = "cax:dialog-open-request";
+const DIALOG_LOOKUP_RETRY_DELAY_MS = 16;
 
 interface DialogOpenRequestDetail {
   id: string;
@@ -17,7 +18,12 @@ export const showDialog = (dialog: HTMLDialogElement): boolean => {
   try {
     dialog.showModal();
   } catch {
-    // showModal can throw when the browser rejects opening state.
+    // Fallback to non-modal open when showModal is rejected by browser state.
+    try {
+      dialog.show();
+    } catch {
+      // noop
+    }
   }
   return dialog.open;
 };
@@ -36,30 +42,29 @@ const dispatchDialogOpenRequest = (dialogId: string): void => {
 const showDialogWhenReady = (dialogId: string, attempts = 0): void => {
   const dialog = getDialogById(dialogId);
   if (dialog !== null) {
-    const opened = showDialog(dialog);
-    if (!opened && attempts < MAX_DIALOG_LOOKUP_ATTEMPTS) {
-      requestAnimationFrame(() => {
-        showDialogWhenReady(dialogId, attempts + 1);
-      });
-    }
+    showDialog(dialog);
     return;
   }
-  if (attempts === 0) {
-    dispatchDialogOpenRequest(dialogId);
-  }
+  // Dispatch on every attempt so we can recover when the listener mounts after the first click.
+  dispatchDialogOpenRequest(dialogId);
   if (attempts >= MAX_DIALOG_LOOKUP_ATTEMPTS) {
     return;
   }
-  requestAnimationFrame(() => {
+  window.setTimeout(() => {
     showDialogWhenReady(dialogId, attempts + 1);
-  });
+  }, DIALOG_LOOKUP_RETRY_DELAY_MS);
 };
 
 export const runDialogCommand = (command?: string, commandfor?: string) => {
   if (!command || !commandfor || typeof document === "undefined") return;
 
   if (command === "show-modal") {
-    openDialog(commandfor);
+    const scheduleOpen = () => openDialog(commandfor);
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(scheduleOpen);
+    } else {
+      window.setTimeout(scheduleOpen, 0);
+    }
     return;
   }
 

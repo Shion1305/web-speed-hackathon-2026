@@ -25,7 +25,9 @@ export const Button = ({
   const handleClick: ComponentPropsWithRef<"button">["onClick"] = (event) => {
     onClick?.(event);
     if (event.defaultPrevented) return;
-    runDialogCommand(command, commandfor);
+    const nextCommand = event.currentTarget.dataset["command"] ?? command;
+    const nextCommandFor = event.currentTarget.dataset["commandfor"] ?? commandfor;
+    runDialogCommand(nextCommand, nextCommandFor);
   };
 
   return (
@@ -42,6 +44,8 @@ export const Button = ({
         className,
       )}
       type="button"
+      data-command={command}
+      data-commandfor={commandfor}
       onClick={handleClick}
       {...props}
     >
