@@ -1,13 +1,14 @@
 import classNames from "classnames";
 import {
   ChangeEvent,
+  KeyboardEvent,
+  FormEvent,
+  memo,
   useCallback,
+  useEffect,
   useId,
   useRef,
   useState,
-  KeyboardEvent,
-  FormEvent,
-  useEffect,
 } from "react";
 
 import { FontAwesomeIcon } from "@web-speed-hackathon-2026/client/src/components/foundation/FontAwesomeIcon";
@@ -20,18 +21,54 @@ interface Props {
   conversationError: Error | null;
   conversation: Models.DirectMessageConversation;
   activeUser: Models.User;
+  hasMoreBefore: boolean;
+  isLoadingOlder: boolean;
   isPeerTyping: boolean;
   isSubmitting: boolean;
+  onLoadOlder: () => Promise<void>;
   onTyping: () => void;
   onSubmit: (params: DirectMessageFormData) => Promise<void>;
 }
+
+interface DirectMessageItemProps {
+  activeUserId: string;
+  message: Models.DirectMessage;
+}
+
+const DirectMessageItem = memo(({ activeUserId, message }: DirectMessageItemProps) => {
+  const isActiveUserSend = message.sender.id === activeUserId;
+
+  return (
+    <li
+      className={classNames("flex w-full flex-col", isActiveUserSend ? "items-end" : "items-start")}
+    >
+      <p
+        className={classNames(
+          "max-w-3/4 rounded-xl border px-4 py-2 text-sm whitespace-pre-wrap leading-relaxed wrap-anywhere",
+          isActiveUserSend
+            ? "rounded-br-sm border-transparent bg-cax-brand text-cax-surface-raised"
+            : "rounded-bl-sm border-cax-border bg-cax-surface text-cax-text",
+        )}
+      >
+        {message.body}
+      </p>
+      <div className="flex gap-1 text-xs">
+        <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
+        {isActiveUserSend && message.isRead && <span className="text-cax-text-muted">既読</span>}
+      </div>
+    </li>
+  );
+});
 
 export const DirectMessagePage = ({
   conversationError,
   conversation,
   activeUser,
+  hasMoreBefore,
+  isLoadingOlder,
   isPeerTyping,
   isSubmitting,
+  onLoadOlder,
   onTyping,
   onSubmit,
 }: Props) => {
@@ -61,7 +98,7 @@ export const DirectMessagePage = ({
         formRef.current?.requestSubmit();
       }
     },
-    [formRef],
+    [],
   );
 
   const handleSubmit = useCallback(
@@ -112,7 +149,10 @@ export const DirectMessagePage = ({
         </div>
       </header>
 
-      <div className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8">
+      <div
+        className="bg-cax-surface-subtle flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-8"
+        style={{ contentVisibility: "auto" }}
+      >
         {conversation.messages.length === 0 && (
           <p className="text-cax-text-muted text-center text-sm">
             まだメッセージはありません。最初のメッセージを送信してみましょう。
@@ -120,37 +160,25 @@ export const DirectMessagePage = ({
         )}
 
         <ul className="grid gap-3" data-testid="dm-message-list">
-          {conversation.messages.map((message) => {
-            const isActiveUserSend = message.sender.id === activeUser.id;
-
-            return (
-              <li
-                className={classNames(
-                  "flex flex-col w-full",
-                  isActiveUserSend ? "items-end" : "items-start",
-                )}
+          {hasMoreBefore ? (
+            <li className="flex justify-center pb-2">
+              <button
+                className="text-cax-text-muted border-cax-border bg-cax-surface hover:bg-cax-surface-subtle rounded-full border px-3 py-1 text-xs disabled:opacity-60"
+                disabled={isLoadingOlder}
+                onClick={() => void onLoadOlder()}
+                type="button"
               >
-                <p
-                  className={classNames(
-                    "max-w-3/4 rounded-xl border px-4 py-2 text-sm whitespace-pre-wrap leading-relaxed wrap-anywhere",
-                    isActiveUserSend
-                      ? "rounded-br-sm border-transparent bg-cax-brand text-cax-surface-raised"
-                      : "rounded-bl-sm border-cax-border bg-cax-surface text-cax-text",
-                  )}
-                >
-                  {message.body}
-                </p>
-                <div className="flex gap-1 text-xs">
-                  <time dateTime={message.createdAt}>
-                    {formatTime(message.createdAt)}
-                  </time>
-                  {isActiveUserSend && message.isRead && (
-                    <span className="text-cax-text-muted">既読</span>
-                  )}
-                </div>
-              </li>
-            );
-          })}
+                {isLoadingOlder ? "読み込み中..." : "さらに表示"}
+              </button>
+            </li>
+          ) : null}
+          {conversation.messages.map((message) => (
+            <DirectMessageItem
+              activeUserId={activeUser.id}
+              key={message.id}
+              message={message}
+            />
+          ))}
         </ul>
       </div>
 

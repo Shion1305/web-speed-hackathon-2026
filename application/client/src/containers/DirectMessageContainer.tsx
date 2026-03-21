@@ -18,6 +18,43 @@ interface DmTypingEvent {
   payload: {};
 }
 
+const MESSAGE_PAGE_LIMIT = 80;
+
+function mergeConversationMessage(
+  conversation: Models.DirectMessageConversation,
+  message: Models.DirectMessage,
+): Models.DirectMessageConversation {
+  const messages = conversation.messages ?? [];
+  const nextMessages = [...messages];
+  const messageIndex = nextMessages.findIndex((current) => current.id === message.id);
+
+  if (messageIndex === -1) {
+    nextMessages.push(message);
+  } else {
+    nextMessages[messageIndex] = message;
+  }
+
+  return {
+    ...conversation,
+    messages: nextMessages,
+  };
+}
+
+function mergeOlderConversationMessages(
+  conversation: Models.DirectMessageConversation,
+  olderMessages: Models.DirectMessage[],
+  hasMoreBefore: boolean | undefined,
+): Models.DirectMessageConversation {
+  const knownMessageIds = new Set(conversation.messages.map((message) => message.id));
+  const prependMessages = olderMessages.filter((message) => knownMessageIds.has(message.id) === false);
+
+  return {
+    ...conversation,
+    hasMoreBefore,
+    messages: [...prependMessages, ...conversation.messages],
+  };
+}
+
 const TYPING_INDICATOR_DURATION_MS = 10 * 1000;
 
 interface Props {
@@ -31,6 +68,7 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
   const [conversation, setConversation] = useState<Models.DirectMessageConversation | null>(null);
   const [conversationError, setConversationError] = useState<Error | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const peerTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,7 +80,7 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
 
     try {
       const data = await fetchJSON<Models.DirectMessageConversation>(
-        `/api/v1/dm/${conversationId}`,
+        `/api/v1/dm/${conversationId}?limit=${MESSAGE_PAGE_LIMIT}`,
       );
       setConversation(data);
       setConversationError(null);
@@ -57,23 +95,73 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
   }, [conversationId]);
 
   useEffect(() => {
+    setConversation(null);
+    setConversationError(null);
+    setIsPeerTyping(false);
+    if (peerTypingTimeoutRef.current !== null) {
+      clearTimeout(peerTypingTimeoutRef.current);
+      peerTypingTimeoutRef.current = null;
+    }
+
     void loadConversation();
     void sendRead();
+
+    return () => {
+      if (peerTypingTimeoutRef.current !== null) {
+        clearTimeout(peerTypingTimeoutRef.current);
+        peerTypingTimeoutRef.current = null;
+      }
+    };
   }, [loadConversation, sendRead]);
+
+  const handleLoadOlder = useCallback(async () => {
+    if (conversation == null || conversation.hasMoreBefore !== true || isLoadingOlder) {
+      return;
+    }
+
+    const oldestMessage = conversation.messages[0];
+    if (oldestMessage == null) {
+      return;
+    }
+
+    setIsLoadingOlder(true);
+    try {
+      const olderBatch = await fetchJSON<Models.DirectMessageConversation>(
+        `/api/v1/dm/${conversationId}?limit=${MESSAGE_PAGE_LIMIT}&before=${encodeURIComponent(
+          oldestMessage.createdAt,
+        )}`,
+      );
+      setConversation((current) => {
+        if (current == null) {
+          return current;
+        }
+        return mergeOlderConversationMessages(current, olderBatch.messages, olderBatch.hasMoreBefore);
+      });
+    } catch {
+      // Preserve existing messages when loading older batches fails.
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [conversation, conversationId, isLoadingOlder]);
 
   const handleSubmit = useCallback(
     async (params: DirectMessageFormData) => {
       setIsSubmitting(true);
       try {
-        await sendJSON(`/api/v1/dm/${conversationId}/messages`, {
+        const message = await sendJSON<Models.DirectMessage>(`/api/v1/dm/${conversationId}/messages`, {
           body: params.body,
         });
-        loadConversation();
+        setConversation((current) => {
+          if (current == null) {
+            return current;
+          }
+          return mergeConversationMessage(current, message);
+        });
       } finally {
         setIsSubmitting(false);
       }
     },
-    [conversationId, loadConversation],
+    [conversationId],
   );
 
   const handleTyping = useCallback(async () => {
@@ -82,16 +170,21 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
 
   useWs(`/api/v1/dm/${conversationId}`, (event: DmUpdateEvent | DmTypingEvent) => {
     if (event.type === "dm:conversation:message") {
-      void loadConversation().then(() => {
-        if (event.payload.sender.id !== activeUser?.id) {
-          setIsPeerTyping(false);
-          if (peerTypingTimeoutRef.current !== null) {
-            clearTimeout(peerTypingTimeoutRef.current);
-          }
-          peerTypingTimeoutRef.current = null;
+      setConversation((current) => {
+        if (current == null) {
+          return current;
         }
+        return mergeConversationMessage(current, event.payload);
       });
-      void sendRead();
+
+      if (event.payload.sender.id !== activeUser?.id) {
+        setIsPeerTyping(false);
+        if (peerTypingTimeoutRef.current !== null) {
+          clearTimeout(peerTypingTimeoutRef.current);
+        }
+        peerTypingTimeoutRef.current = null;
+        void sendRead();
+      }
     } else if (event.type === "dm:conversation:typing") {
       setIsPeerTyping(true);
       if (peerTypingTimeoutRef.current !== null) {
@@ -131,6 +224,9 @@ export const DirectMessageContainer = ({ activeUser, authModalId }: Props) => {
         conversationError={conversationError}
         conversation={conversation}
         activeUser={activeUser}
+        hasMoreBefore={conversation.hasMoreBefore === true}
+        isLoadingOlder={isLoadingOlder}
+        onLoadOlder={handleLoadOlder}
         onTyping={handleTyping}
         isPeerTyping={isPeerTyping}
         isSubmitting={isSubmitting}

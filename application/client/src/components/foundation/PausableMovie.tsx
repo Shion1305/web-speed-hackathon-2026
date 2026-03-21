@@ -4,6 +4,10 @@ import { AspectRatioBox } from "@web-speed-hackathon-2026/client/src/components/
 import { useNearViewport } from "@web-speed-hackathon-2026/client/src/hooks/use_near_viewport";
 
 interface Props {
+  sources?: readonly {
+    src: string;
+    type: string;
+  }[];
   src: string;
 }
 
@@ -13,7 +17,7 @@ const MOVIE_POSTER_DATA_URI =
 /**
  * クリックすると再生・一時停止を切り替えます。
  */
-export const PausableMovie = ({ src }: Props) => {
+export const PausableMovie = ({ sources, src }: Props) => {
   const movieRef = useRef<HTMLVideoElement>(null);
   const readyCanvasRef = useRef<HTMLCanvasElement>(null);
   const { isNearViewport, targetRef } = useNearViewport<HTMLButtonElement>({
@@ -68,7 +72,12 @@ export const PausableMovie = ({ src }: Props) => {
           preload="auto"
           onLoadedMetadata={handleLoadMovie}
           src={isNearViewport ? src : undefined}
-        />
+        >
+          {isNearViewport &&
+            sources?.map((source) => (
+              <source key={source.type} src={source.src} type={source.type} />
+            ))}
+        </video>
       </button>
     </AspectRatioBox>
   );

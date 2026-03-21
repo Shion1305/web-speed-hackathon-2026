@@ -1,15 +1,18 @@
-import { promises as fs } from "fs";
-import path from "path";
-
 import { Router } from "express";
 import { fileTypeFromBuffer } from "file-type";
 import httpErrors from "http-errors";
 import { v4 as uuidv4 } from "uuid";
 
-import { UPLOAD_PATH } from "@web-speed-hackathon-2026/server/src/paths";
+import {
+  createCanonicalMedia,
+  createDerivativeMedia,
+  getMediaPath,
+  storeMediaSource,
+} from "@web-speed-hackathon-2026/server/src/utils/media_derivation";
+import { mediaDerivationQueue } from "@web-speed-hackathon-2026/server/src/utils/media_derivation_queue";
 
-// 変換した動画の拡張子
-const EXTENSION = "mp4";
+const SOURCE_KIND = "movies";
+const CANONICAL_EXT = "mp4";
 
 export const movieRouter = Router();
 
@@ -22,15 +25,28 @@ movieRouter.post("/movies", async (req, res) => {
   }
 
   const type = await fileTypeFromBuffer(req.body);
-  if (type === undefined || type.ext !== EXTENSION) {
+  if (type === undefined || type.mime.startsWith("video/") === false) {
     throw new httpErrors.BadRequest("Invalid file type");
   }
 
   const movieId = uuidv4();
-
-  const filePath = path.resolve(UPLOAD_PATH, `./movies/${movieId}.${EXTENSION}`);
-  await fs.mkdir(path.resolve(UPLOAD_PATH, "movies"), { recursive: true });
-  await fs.writeFile(filePath, req.body);
+  const sourcePath = await storeMediaSource(SOURCE_KIND, movieId, type.ext, req.body);
+  if (type.ext === CANONICAL_EXT) {
+    await createCanonicalMedia(SOURCE_KIND, sourcePath, getMediaPath(SOURCE_KIND, movieId, CANONICAL_EXT));
+  }
+  void mediaDerivationQueue.enqueue({
+    key: `${SOURCE_KIND}:${movieId}`,
+    run: async () => {
+      if (type.ext !== CANONICAL_EXT) {
+        await createCanonicalMedia(
+          SOURCE_KIND,
+          sourcePath,
+          getMediaPath(SOURCE_KIND, movieId, CANONICAL_EXT),
+        );
+      }
+      await createDerivativeMedia(SOURCE_KIND, sourcePath, getMediaPath(SOURCE_KIND, movieId, "webm"));
+    },
+  });
 
   return res.status(200).type("application/json").send({ id: movieId });
 });

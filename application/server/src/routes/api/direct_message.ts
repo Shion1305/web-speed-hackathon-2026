@@ -236,7 +236,22 @@ directMessageRouter.get("/dm/:conversationId", async (req, res) => {
     throw new httpErrors.Unauthorized();
   }
 
+  const parsedLimit = Number(req.query["limit"]);
+  const limit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(Math.floor(parsedLimit), 200) : 80;
+  const rawBefore = req.query["before"];
+  const before =
+    typeof rawBefore === "string" && rawBefore.trim() !== ""
+      ? new Date(rawBefore)
+      : undefined;
+  const hasValidBefore = before !== undefined && Number.isNaN(before.getTime()) === false;
+
   const conversation = await DirectMessageConversation.findOne({
+    attributes: ["id", "initiatorId", "memberId"],
+    include: [
+      { association: "initiator", include: [{ association: "profileImage" }] },
+      { association: "member", include: [{ association: "profileImage" }] },
+    ],
     where: {
       id: req.params.conversationId,
       [Op.or]: [{ initiatorId: req.session.userId }, { memberId: req.session.userId }],
@@ -246,7 +261,44 @@ directMessageRouter.get("/dm/:conversationId", async (req, res) => {
     throw new httpErrors.NotFound();
   }
 
-  return res.status(200).type("application/json").send(conversation);
+  const messageWhere = {
+    conversationId: conversation.id,
+    ...(hasValidBefore && before !== undefined ? { createdAt: { [Op.lt]: before } } : {}),
+  };
+
+  const messageRows = await DirectMessage.findAll({
+    include: [{ association: "sender", include: [{ association: "profileImage" }] }],
+    limit,
+    order: [["createdAt", "DESC"]],
+    where: messageWhere,
+  });
+  const messages = messageRows.reverse();
+
+  let hasMoreBefore = false;
+  if (messages.length > 0) {
+    const oldestMessage = messages[0]!;
+    const olderCount = await DirectMessage.count({
+      where: {
+        conversationId: conversation.id,
+        createdAt: { [Op.lt]: oldestMessage.createdAt },
+      },
+    });
+    hasMoreBefore = olderCount > 0;
+  } else if (hasValidBefore && before !== undefined) {
+    const olderCount = await DirectMessage.count({
+      where: {
+        conversationId: conversation.id,
+        createdAt: { [Op.lt]: before },
+      },
+    });
+    hasMoreBefore = olderCount > 0;
+  }
+
+  return res.status(200).type("application/json").send({
+    ...conversation.toJSON(),
+    hasMoreBefore,
+    messages,
+  });
 });
 
 directMessageRouter.ws("/dm/:conversationId", async (req, _res) => {
