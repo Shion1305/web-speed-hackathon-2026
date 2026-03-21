@@ -75,6 +75,7 @@ const config = {
     }),
     new MiniCssExtractPlugin({
       filename: "styles/[name]-[contenthash].css",
+      runtime: false,
     }),
     new CopyWebpackPlugin({
       patterns: [
