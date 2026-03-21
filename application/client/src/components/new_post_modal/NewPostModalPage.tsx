@@ -32,8 +32,13 @@ function loadImageConverter() {
   return imageConverterPromise;
 }
 
+interface SubmitImage {
+  alt: string;
+  file: File;
+}
+
 interface SubmitParams {
-  images: File[];
+  images: SubmitImage[];
   movie: File | undefined;
   sound: File | undefined;
   text: string;
@@ -146,7 +151,7 @@ export const NewPostModalPage = ({ id, hasError, isLoading, onResetError, onSubm
       if (!needsConversion) {
         updateParams((current) => ({
           ...current,
-          images: files,
+          images: files.map((file) => ({ alt: "", file })),
           movie: undefined,
           sound: undefined,
         }));
@@ -162,11 +167,11 @@ export const NewPostModalPage = ({ id, hasError, isLoading, onResetError, onSubm
         const convertedFiles = await Promise.all(
           files.map(async (file) => {
             if (isAcceptableImage(file)) {
-              return file;
+              return { alt: "", file };
             }
 
-            const blob = await convertImage(file, { extension: MagickFormat.Jpg });
-            return new File([blob], "converted.jpg", { type: "image/jpeg" });
+            const { alt, blob } = await convertImage(file, { extension: MagickFormat.Jpg });
+            return { alt, file: new File([blob], "converted.jpg", { type: "image/jpeg" }) };
           }),
         );
 

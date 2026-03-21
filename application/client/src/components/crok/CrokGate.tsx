@@ -1,6 +1,7 @@
 import { ComponentPropsWithRef } from "react";
 import { Helmet } from "react-helmet";
 
+import { PageTitle } from "@web-speed-hackathon-2026/client/src/components/application/PageTitle";
 import { openDialog } from "@web-speed-hackathon-2026/client/src/utils/dialog_command";
 
 interface Props {
@@ -22,9 +23,7 @@ export const CrokGate = ({
 
   return (
     <>
-      <Helmet>
-        <title>Crok - CaX</title>
-      </Helmet>
+      <PageTitle title="Crok - CaX" />
       <section className="space-y-4 px-6 py-12 text-center">
         <p className="text-lg font-bold">{headline}</p>
         {description !== "" ? <p className="text-cax-text-muted text-sm">{description}</p> : null}
