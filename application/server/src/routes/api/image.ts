@@ -4,7 +4,6 @@ import httpErrors from "http-errors";
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  createDerivativeMedia,
   createCanonicalMedia,
   getMediaPath,
   storeMediaSource,
@@ -33,22 +32,18 @@ imageRouter.post("/images", async (req, res) => {
   const sourcePath = await storeMediaSource(SOURCE_KIND, imageId, type.ext, req.body);
   if (type.ext === CANONICAL_EXT) {
     await createCanonicalMedia(SOURCE_KIND, sourcePath, getMediaPath(SOURCE_KIND, imageId, CANONICAL_EXT));
-  }
-  void mediaDerivationQueue.enqueue({
-    key: `${SOURCE_KIND}:${imageId}`,
-    run: async () => {
-      if (type.ext !== CANONICAL_EXT) {
+  } else {
+    void mediaDerivationQueue.enqueue({
+      key: `${SOURCE_KIND}:${imageId}:canonical`,
+      run: async () => {
         await createCanonicalMedia(
           SOURCE_KIND,
           sourcePath,
           getMediaPath(SOURCE_KIND, imageId, CANONICAL_EXT),
         );
-      }
-      for (const ext of ["avif", "webp"] as const) {
-        await createDerivativeMedia(SOURCE_KIND, sourcePath, getMediaPath(SOURCE_KIND, imageId, ext));
-      }
-    },
-  });
+      },
+    });
+  }
 
   return res.status(200).type("application/json").send({ id: imageId });
 });

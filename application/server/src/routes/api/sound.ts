@@ -34,20 +34,10 @@ soundRouter.post("/sounds", async (req, res) => {
   const sourcePath = await storeMediaSource(SOURCE_KIND, soundId, type.ext, req.body);
   const { artist, title } = await extractMetadataFromSound(req.body);
   const canonicalPath = getMediaPath(SOURCE_KIND, soundId, CANONICAL_EXT);
-  const derivativePath = getMediaPath(SOURCE_KIND, soundId, "ogg");
   const metadata = { artist, title };
-  const enqueueDerivative = (): void => {
-    void mediaDerivationQueue.enqueue({
-      key: `${SOURCE_KIND}:${soundId}:derivative`,
-      run: async () => {
-        await createDerivativeMedia(SOURCE_KIND, sourcePath, derivativePath, metadata);
-      },
-    });
-  };
 
   if (type.ext === CANONICAL_EXT) {
     await createCanonicalMedia(SOURCE_KIND, sourcePath, canonicalPath, metadata);
-    enqueueDerivative();
   } else {
     void mediaDerivationQueue.enqueue({
       key: `${SOURCE_KIND}:${soundId}:canonical`,
@@ -58,7 +48,6 @@ soundRouter.post("/sounds", async (req, res) => {
           canonicalPath,
           metadata,
         );
-        enqueueDerivative();
       },
     });
   }
