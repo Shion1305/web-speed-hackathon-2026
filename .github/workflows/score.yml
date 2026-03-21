@@ -6,18 +6,22 @@ on:
     pull_request:
         types: [opened, reopened, synchronize]
 
+env:
+    # Number of scoring runs for stability (median/min/max reported)
+    SCORE_RUNS: 3
+
 jobs:
     score:
         name: Build & Score
         runs-on: ubuntu-24.04
-        # Scoring can take up to 20 minutes. Allow generous headroom for
-        # Docker build and scoring time on top of that.
-        timeout-minutes: 45
+        # 3 runs × ~20 min each + docker build + overhead
+        timeout-minutes: 90
 
         permissions:
             contents: read
             issues: write
             pull-requests: write
+            actions: read
 
         steps:
             # ------------------------------------------------------------------ #
@@ -113,44 +117,87 @@ jobs:
               run: npx playwright install chrome --with-deps
 
             # ------------------------------------------------------------------ #
-            # 10. Run the scoring tool
+            # 10. Run scoring tool N times for stability
             # ------------------------------------------------------------------ #
-            - name: Run scoring tool
-              id: scoring
+            - name: Run scoring tool (run 1 of ${{ env.SCORE_RUNS }})
+              id: scoring_1
               working-directory: scoring-tool
               run: |
                   set -o pipefail
                   env -u GITHUB_ACTIONS pnpm start --applicationUrl http://localhost:8080 \
-                    2>&1 | tee /tmp/score-output.txt
+                    2>&1 | tee /tmp/score-1.txt || true
+
+            - name: Run scoring tool (run 2 of ${{ env.SCORE_RUNS }})
+              id: scoring_2
+              working-directory: scoring-tool
+              run: |
+                  set -o pipefail
+                  env -u GITHUB_ACTIONS pnpm start --applicationUrl http://localhost:8080 \
+                    2>&1 | tee /tmp/score-2.txt || true
+
+            - name: Run scoring tool (run 3 of ${{ env.SCORE_RUNS }})
+              id: scoring_3
+              working-directory: scoring-tool
+              run: |
+                  set -o pipefail
+                  env -u GITHUB_ACTIONS pnpm start --applicationUrl http://localhost:8080 \
+                    2>&1 | tee /tmp/score-3.txt || true
 
             # ------------------------------------------------------------------ #
-            # 11. Post score results
+            # 11. Download baseline scores from latest main branch run
+            # ------------------------------------------------------------------ #
+            - name: Download baseline scores artifact
+              if: github.event_name == 'pull_request'
+              uses: dawidd6/action-download-artifact@20319c5641d997e8e3e89ff4333dd43bc21dff6c # v9
+              with:
+                  name: score-baseline
+                  branch: main
+                  workflow: score.yml
+                  path: /tmp/baseline
+                  if_no_artifact_found: warn
+              continue-on-error: true
+
+            # ------------------------------------------------------------------ #
+            # 12. Generate rich score comment
+            # ------------------------------------------------------------------ #
+            - name: Generate score comment
+              if: always()
+              run: |
+                  # Collect run files that exist
+                  RUN_FILES=""
+                  for i in 1 2 3; do
+                    if [ -s "/tmp/score-${i}.txt" ]; then
+                      RUN_FILES="${RUN_FILES},/tmp/score-${i}.txt"
+                    fi
+                  done
+                  RUN_FILES="${RUN_FILES#,}"  # trim leading comma
+
+                  BASELINE_ARG=""
+                  if [ -f "/tmp/baseline/scores.json" ]; then
+                    BASELINE_ARG="--baseline /tmp/baseline/scores.json"
+                  fi
+
+                  node .github/scripts/generate-score-comment.mjs \
+                    --runs "${RUN_FILES}" \
+                    ${BASELINE_ARG} \
+                    --commit "${{ github.sha }}" \
+                    --output /tmp/comment.md \
+                    --json-output /tmp/scores.json
+
+            # ------------------------------------------------------------------ #
+            # 13. Post score comment on PR / summary on push
             # ------------------------------------------------------------------ #
             - name: Post score results
               if: always()
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  SCORE_BODY="$(cat /tmp/score-output.txt 2>/dev/null || echo 'Score output not available')"
                   COMMENT_MARKER="<!-- wsh-score-result -->"
+                  COMMENT_BODY="$(cat /tmp/comment.md 2>/dev/null || echo 'Score output not available')"
 
                   if [ "${{ github.event_name }}" = "pull_request" ]; then
                     PR_NUMBER="${{ github.event.pull_request.number }}"
                     REPO="${{ github.repository }}"
-
-                    COMMENT_BODY="${COMMENT_MARKER}
-                  ## Web Speed Hackathon 2026 - Score Results
-
-                  <details>
-                  <summary>View score report</summary>
-
-                  \`\`\`
-                  ${SCORE_BODY}
-                  \`\`\`
-
-                  </details>
-
-                  Commit: \`${{ github.sha }}\`"
 
                     EXISTING_COMMENT_ID=$(gh api \
                       "repos/${REPO}/issues/${PR_NUMBER}/comments" \
@@ -171,35 +218,41 @@ jobs:
                     fi
 
                   else
-                    echo "## Web Speed Hackathon 2026 - Score Results" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    echo "Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    echo "<details>" >> $GITHUB_STEP_SUMMARY
-                    echo "<summary>View score report</summary>" >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    echo '```' >> $GITHUB_STEP_SUMMARY
-                    cat /tmp/score-output.txt >> $GITHUB_STEP_SUMMARY
-                    echo '```' >> $GITHUB_STEP_SUMMARY
-                    echo "" >> $GITHUB_STEP_SUMMARY
-                    echo "</details>" >> $GITHUB_STEP_SUMMARY
+                    # Push to main: write to step summary
+                    cat /tmp/comment.md >> $GITHUB_STEP_SUMMARY
                   fi
 
             # ------------------------------------------------------------------ #
-            # 12. Upload debug logs on failure
+            # 14. Save scores as baseline artifact (main branch only)
             # ------------------------------------------------------------------ #
-            - name: Upload debug logs
-              if: failure()
+            - name: Save baseline scores artifact
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: debug-logs-${{ github.run_id }}-${{ github.run_attempt }}
+                  name: score-baseline
+                  path: /tmp/scores.json
+                  retention-days: 30
+                  if-no-files-found: warn
+
+            # ------------------------------------------------------------------ #
+            # 15. Upload all raw score files as artifact (always, for debugging)
+            # ------------------------------------------------------------------ #
+            - name: Upload raw score logs
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: score-logs-${{ github.run_id }}-${{ github.run_attempt }}
                   path: |
-                      /tmp/score-output.txt
-                  retention-days: 7
+                      /tmp/score-1.txt
+                      /tmp/score-2.txt
+                      /tmp/score-3.txt
+                      /tmp/scores.json
+                      /tmp/comment.md
+                  retention-days: 14
                   if-no-files-found: ignore
 
             # ------------------------------------------------------------------ #
-            # 13. Stop the application container
+            # 16. Stop the application container
             # ------------------------------------------------------------------ #
             - name: Stop application container
               if: always()
