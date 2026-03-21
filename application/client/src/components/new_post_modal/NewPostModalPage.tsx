@@ -53,25 +53,24 @@ function hasExtension(file: File, extensions: string[]): boolean {
 }
 
 function isAcceptableImage(file: File): boolean {
-  return file.type === "image/jpeg" || hasExtension(file, ["jpg", "jpeg"]);
+  if (file.type.startsWith("image/")) {
+    return true;
+  }
+  return hasExtension(file, ["avif", "jpg", "jpeg", "png", "tif", "tiff", "webp"]);
 }
 
 function isAcceptableSound(file: File): boolean {
-  return (
-    file.type === "audio/mpeg" ||
-    file.type === "audio/wav" ||
-    file.type === "audio/wave" ||
-    file.type === "audio/x-wav" ||
-    hasExtension(file, ["mp3", "wav", "wave"])
-  );
+  if (file.type.startsWith("audio/")) {
+    return true;
+  }
+  return hasExtension(file, ["flac", "m4a", "mp3", "ogg", "wav"]);
 }
 
 function isAcceptableMovie(file: File): boolean {
-  return (
-    file.type === "video/mp4" ||
-    file.type === "video/x-matroska" ||
-    hasExtension(file, ["mp4", "mkv"])
-  );
+  if (file.type.startsWith("video/")) {
+    return true;
+  }
+  return hasExtension(file, ["avi", "m4v", "mkv", "mov", "mp4", "webm"]);
 }
 
 export const NewPostModalPage = ({
@@ -107,11 +106,9 @@ export const NewPostModalPage = ({
   }, []);
 
   const updateParams = useCallback((updater: (current: SubmitParams) => SubmitParams) => {
-    setParams((current) => {
-      const next = updater(current);
-      paramsRef.current = next;
-      return next;
-    });
+    const next = updater(paramsRef.current);
+    paramsRef.current = next;
+    setParams(next);
   }, []);
 
   const beginSelection = useCallback(() => {

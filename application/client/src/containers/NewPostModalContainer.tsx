@@ -48,6 +48,24 @@ async function sendNewPost({ images, movie, sound, text }: SubmitParams): Promis
   return sendJSON("/api/v1/posts", payload);
 }
 
+async function sendNewPostWithRetry(params: SubmitParams, retryCount = 3): Promise<Models.Post> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < retryCount; attempt += 1) {
+    try {
+      return await sendNewPost(params);
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 >= retryCount) {
+        break;
+      }
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 250 * (attempt + 1));
+      });
+    }
+  }
+  throw lastError;
+}
+
 interface Props {
   id: string;
 }
@@ -85,7 +103,7 @@ export const NewPostModalContainer = ({ id }: Props) => {
     async (params: SubmitParams) => {
       try {
         setIsLoading(true);
-        const post = await sendNewPost(params);
+        const post = await sendNewPostWithRetry(params);
         const postPath = `/api/v1/posts/${post.id}`;
         void prefetchJSON(postPath);
         ref.current?.close();

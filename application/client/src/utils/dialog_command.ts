@@ -1,4 +1,4 @@
-const MAX_DIALOG_LOOKUP_ATTEMPTS = 60;
+const MAX_DIALOG_LOOKUP_ATTEMPTS = 600;
 const DIALOG_OPEN_REQUEST_EVENT_NAME = "cax:dialog-open-request";
 
 interface DialogOpenRequestDetail {
