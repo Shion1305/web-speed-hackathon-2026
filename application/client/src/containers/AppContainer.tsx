@@ -17,8 +17,11 @@ import {
 } from "@web-speed-hackathon-2026/client/src/utils/dialog_command";
 import { fetchJSON, sendJSON } from "@web-speed-hackathon-2026/client/src/utils/fetchers";
 
+const loadAuthModalContainer = () =>
+  import("@web-speed-hackathon-2026/client/src/containers/AuthModalContainer");
+
 const AuthModalContainer = lazy(() =>
-  import("@web-speed-hackathon-2026/client/src/containers/AuthModalContainer").then((m) => ({
+  loadAuthModalContainer().then((m) => ({
     default: m.AuthModalContainer,
   })),
 );
@@ -74,6 +77,16 @@ function requiresActiveUserImmediately(pathname: string): boolean {
   return pathname === "/crok" || pathname.startsWith("/dm");
 }
 
+function scheduleIdleTask(task: () => void): () => void {
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(task, { timeout: 1500 });
+    return () => window.cancelIdleCallback(id);
+  }
+
+  const id = window.setTimeout(task, 250);
+  return () => window.clearTimeout(id);
+}
+
 export const AppContainer = () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -103,13 +116,14 @@ export const AppContainer = () => {
       loadUser();
       return;
     }
-    if ("requestIdleCallback" in window) {
-      const id = window.requestIdleCallback(loadUser, { timeout: 1500 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = setTimeout(loadUser, 250);
-    return () => clearTimeout(id);
+    return scheduleIdleTask(loadUser);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return scheduleIdleTask(() => {
+      void loadAuthModalContainer();
+    });
   }, []);
 
   const handleLogout = useCallback(async () => {
