@@ -65,7 +65,7 @@ export const PausableMovie = ({ src }: Props) => {
           muted={true}
           poster={MOVIE_POSTER_DATA_URI}
           playsInline={true}
-          preload="auto"
+          preload="metadata"
           onLoadedMetadata={handleLoadMovie}
           src={isNearViewport ? src : undefined}
         />
