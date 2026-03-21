@@ -30,7 +30,9 @@ export const CrokPage = ({ messages, isStreaming, onSendMessage }: Props) => {
           {messages.map((message, index) => (
             <ChatMessage
               key={index}
-              isStreaming={isStreaming && index === messages.length - 1 && message.role === "assistant"}
+              isStreaming={
+                isStreaming && index === messages.length - 1 && message.role === "assistant"
+              }
               message={message}
             />
           ))}
