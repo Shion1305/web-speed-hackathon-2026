@@ -47,13 +47,9 @@ export const SoundPlayer = ({ sound }: Props) => {
     });
   }, []);
 
-  if (isLoading || waveformData === null) {
-    return <div ref={targetRef} className="bg-cax-surface-subtle h-full w-full" />;
-  }
-
   return (
     <div ref={targetRef} className="bg-cax-surface-subtle flex h-full w-full items-center justify-center">
-      <audio ref={audioRef} loop={true} onTimeUpdate={handleTimeUpdate}>
+      <audio ref={audioRef} loop={true} onTimeUpdate={handleTimeUpdate} preload="none">
         {isNearViewport &&
           getSoundSources(sound.id).map((source) => (
             <source key={source.type} src={source.src} type={source.type} />
@@ -78,13 +74,19 @@ export const SoundPlayer = ({ sound }: Props) => {
         <div className="pt-2">
           <AspectRatioBox aspectHeight={1} aspectWidth={10}>
             <div className="relative h-full w-full">
-              <div className="absolute inset-0 h-full w-full">
-                <SoundWaveSVG max={waveformData.max} peaks={waveformData.peaks} />
-              </div>
-              <div
-                className="bg-cax-surface-subtle absolute inset-0 h-full w-full opacity-75"
-                style={{ left: `${currentTimeRatio * 100}%` }}
-              ></div>
+              {isLoading || waveformData === null ? (
+                <div className="bg-cax-text-muted/20 absolute inset-0 rounded-sm" />
+              ) : (
+                <>
+                  <div className="absolute inset-0 h-full w-full">
+                    <SoundWaveSVG max={waveformData.max} peaks={waveformData.peaks} />
+                  </div>
+                  <div
+                    className="bg-cax-surface-subtle absolute inset-0 h-full w-full opacity-75"
+                    style={{ left: `${currentTimeRatio * 100}%` }}
+                  ></div>
+                </>
+              )}
             </div>
           </AspectRatioBox>
         </div>

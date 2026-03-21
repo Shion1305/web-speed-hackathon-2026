@@ -16,7 +16,7 @@ export async function convertSound(file: File, options: Options): Promise<Blob> 
     await ffmpeg.writeFile(inputFile, new Uint8Array(await file.arrayBuffer()));
 
     // 文字化けを防ぐためにメタデータを抽出して付与し直す
-    const metadata = await extractMetadataFromSound(file, ffmpeg);
+    const metadata = await extractMetadataFromSound(file);
 
     await ffmpeg.exec([
       "-i",

@@ -1,4 +1,12 @@
-import { Suspense, lazy, useCallback, useEffect, useId, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  startTransition,
+  useCallback,
+  useEffect,
+  useId,
+  useState,
+} from "react";
 import { Route, Routes, useLocation, useNavigate } from "react-router";
 
 import { AppPage } from "@web-speed-hackathon-2026/client/src/components/application/AppPage";
@@ -76,11 +84,17 @@ export const AppContainer = () => {
   const needsImmediate = requiresActiveUserImmediately(pathname);
 
   const [activeUser, setActiveUser] = useState<Models.User | null>(null);
+  const updateActiveUser = useCallback((user: Models.User | null) => {
+    startTransition(() => {
+      setActiveUser(user);
+    });
+  }, []);
+
   useEffect(() => {
     const loadUser = () => {
       void fetchJSON<Models.User>("/api/v1/me")
         .then((user) => {
-          setActiveUser(user);
+          updateActiveUser(user);
         })
         .catch(() => undefined);
     };
@@ -100,22 +114,31 @@ export const AppContainer = () => {
 
   const handleLogout = useCallback(async () => {
     await sendJSON("/api/v1/signout", {});
-    setActiveUser(null);
+    updateActiveUser(null);
     navigate("/");
-  }, [navigate]);
+  }, [navigate, updateActiveUser]);
 
   const authModalId = useId();
   const newPostModalId = useId();
   const [isAuthModalMounted, setIsAuthModalMounted] = useState(false);
   const [isNewPostModalMounted, setIsNewPostModalMounted] = useState(false);
+  const [dialogOpenRequestId, setDialogOpenRequestId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeUser !== null && !isNewPostModalMounted) {
+      setIsNewPostModalMounted(true);
+    }
+  }, [activeUser, isNewPostModalMounted]);
 
   const handleDialogOpenRequest = useCallback(
     (dialogId: string) => {
       if (dialogId === authModalId) {
         setIsAuthModalMounted(true);
+        setDialogOpenRequestId(dialogId);
       }
       if (dialogId === newPostModalId) {
         setIsNewPostModalMounted(true);
+        setDialogOpenRequestId(dialogId);
       }
     },
     [authModalId, newPostModalId],
@@ -126,18 +149,13 @@ export const AppContainer = () => {
   }, [handleDialogOpenRequest]);
 
   useEffect(() => {
-    if (!isAuthModalMounted) {
+    if (dialogOpenRequestId == null) {
       return;
     }
-    openDialog(authModalId);
-  }, [authModalId, isAuthModalMounted]);
 
-  useEffect(() => {
-    if (!isNewPostModalMounted) {
-      return;
-    }
-    openDialog(newPostModalId);
-  }, [newPostModalId, isNewPostModalMounted]);
+    openDialog(dialogOpenRequestId);
+    setDialogOpenRequestId(null);
+  }, [dialogOpenRequestId]);
 
   return (
     <>
@@ -175,9 +193,11 @@ export const AppContainer = () => {
 
       <Suspense fallback={null}>
         {isAuthModalMounted ? (
-          <AuthModalContainer id={authModalId} onUpdateActiveUser={setActiveUser} />
+          <AuthModalContainer id={authModalId} onUpdateActiveUser={updateActiveUser} />
         ) : null}
-        {isNewPostModalMounted ? <NewPostModalContainer id={newPostModalId} /> : null}
+        {isNewPostModalMounted ? (
+          <NewPostModalContainer activeUser={activeUser} id={newPostModalId} />
+        ) : null}
       </Suspense>
     </>
   );
