@@ -133,7 +133,18 @@ const config = {
           },
         },
       }),
-      new CssMinimizerPlugin(),
+      new CssMinimizerPlugin({
+        minimizerOptions: {
+          preset: [
+            "default",
+            {
+              // Disabling calc reduction prevents sub-pixel rounding differences
+              // caused by converting calc(2/1.5) → 1.33333, which shifts layout
+              calc: false,
+            },
+          ],
+        },
+      }),
     ],
     runtimeChunk: "single",
     splitChunks: {
