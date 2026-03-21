@@ -17,7 +17,7 @@ export const SoundPlayer = ({ sound }: Props) => {
     rootMargin: "320px 0px",
   });
   const soundPath = isNearViewport ? getSoundPath(sound.id) : null;
-  const { data, isLoading } = useFetch(soundPath, fetchBinary);
+  const { data } = useFetch(soundPath, fetchBinary);
 
   const [currentTimeRatio, setCurrentTimeRatio] = useState(0);
   const handleTimeUpdate = useCallback<ReactEventHandler<HTMLAudioElement>>((ev) => {
@@ -37,10 +37,6 @@ export const SoundPlayer = ({ sound }: Props) => {
       return !isPlaying;
     });
   }, []);
-
-  if (isLoading || data === null) {
-    return <div ref={targetRef} className="bg-cax-surface-subtle h-full w-full" />;
-  }
 
   return (
     <div
@@ -78,7 +74,7 @@ export const SoundPlayer = ({ sound }: Props) => {
           <AspectRatioBox aspectHeight={1} aspectWidth={10}>
             <div className="relative h-full w-full">
               <div className="absolute inset-0 h-full w-full">
-                <SoundWaveSVG soundData={data} />
+                {data !== null ? <SoundWaveSVG soundData={data} /> : null}
               </div>
               <div
                 className="bg-cax-surface-subtle absolute inset-0 h-full w-full opacity-75"

@@ -66,12 +66,7 @@ async function copyFileWithParent(sourcePath: string, outputPath: string): Promi
   await fs.copyFile(sourcePath, outputPath);
 }
 
-async function runFfmpeg(args: string[]): Promise<void> {
-  const binaryPath = ffmpegPath;
-  if (binaryPath == null) {
-    throw new Error("ffmpeg-static binary is unavailable");
-  }
-
+async function runFfmpegWithBinary(binaryPath: string, args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
       binaryPath,
@@ -110,11 +105,38 @@ async function runFfmpeg(args: string[]): Promise<void> {
   });
 }
 
+async function runFfmpeg(args: string[]): Promise<void> {
+  const attemptedBinaries = new Set<string>();
+  const candidates = [ffmpegPath, "ffmpeg"].filter((candidate): candidate is string => {
+    if (candidate == null || candidate.length === 0) {
+      return false;
+    }
+    if (attemptedBinaries.has(candidate)) {
+      return false;
+    }
+    attemptedBinaries.add(candidate);
+    return true;
+  });
+
+  let lastError: unknown;
+  for (const binaryPath of candidates) {
+    try {
+      await runFfmpegWithBinary(binaryPath, args);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error("No ffmpeg binary available");
+}
+
 async function createImageVariant(
   sourcePath: string,
   outputPath: string,
   outputExt: ImageOutputExt,
 ): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   if (getFileExtension(sourcePath) === outputExt) {
     await copyFileWithParent(sourcePath, outputPath);
     return;
@@ -138,6 +160,7 @@ async function createMovieVariant(
   outputPath: string,
   outputExt: MovieOutputExt,
 ): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   if (getFileExtension(sourcePath) === outputExt) {
     await copyFileWithParent(sourcePath, outputPath);
     return;
@@ -182,6 +205,7 @@ async function createSoundVariant(
   outputExt: SoundOutputExt,
   metadata: SoundMetadata,
 ): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   if (getFileExtension(sourcePath) === outputExt) {
     await copyFileWithParent(sourcePath, outputPath);
     return;

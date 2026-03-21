@@ -15,8 +15,14 @@ async function calculate(data: ArrayBuffer): Promise<ParsedData> {
 
   const audioCtx = new AudioContextClass();
 
-  // 音声をデコードする
-  const buffer = await audioCtx.decodeAudioData(data.slice(0));
+  let buffer: AudioBuffer;
+  try {
+    // 音声をデコードする
+    buffer = await audioCtx.decodeAudioData(data.slice(0));
+  } catch {
+    await audioCtx.close();
+    return { max: 0, peaks: [] };
+  }
   await audioCtx.close();
 
   const leftData = buffer.getChannelData(0);
