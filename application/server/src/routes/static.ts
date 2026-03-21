@@ -32,13 +32,6 @@ try {
   // populated after client build
 }
 
-let termHtml = "";
-try {
-  termHtml = fs.readFileSync(path.join(CLIENT_DIST_PATH, "term.html"), "utf8");
-} catch {
-  // populated after client build
-}
-
 const POST_DETAIL_ROUTE = /^\/posts\/([a-f0-9-]{36})$/;
 const BOOTSTRAP_LIMIT = 30;
 
@@ -88,21 +81,26 @@ async function buildInjectedHtml(reqPath: string): Promise<string | null> {
     // fall back to non-bootstrapped HTML
   }
 
-  if (Object.keys(bootstrapData).length === 0) {
+  const injections: string[] = [];
+
+  if (Object.keys(bootstrapData).length > 0) {
+    injections.push(`<script>window.__CAX_BOOTSTRAP__=${serializeBootstrap(bootstrapData)}</script>`);
+  }
+
+  // Inject font preload as DOM node for /terms — browser discovers font at parse time
+  if (reqPath === "/terms") {
+    injections.push(
+      `<link rel="preload" href="/fonts/ReiNoAreMincho-Regular-Subset.woff2" as="font" type="font/woff2" crossorigin />`,
+      `<link rel="preload" href="/fonts/ReiNoAreMincho-Heavy-Subset.woff2" as="font" type="font/woff2" crossorigin />`,
+    );
+  }
+
+  if (injections.length === 0) {
     return null;
   }
 
-  const scriptTag = `<script>window.__CAX_BOOTSTRAP__=${serializeBootstrap(bootstrapData)}</script>`;
-  return baseHtml.replace("</head>", `${scriptTag}</head>`);
+  return baseHtml.replace("</head>", `${injections.join("")}</head>`);
 }
-
-// Serve static term.html for /term — no JS/CSS bundle needed
-staticRouter.use((req, res, next) => {
-  if (req.method !== "GET" || req.path !== "/term" || !termHtml) return next();
-  res.setHeader("Content-Type", "text/html; charset=UTF-8");
-  res.setHeader("Cache-Control", "no-cache");
-  return res.send(termHtml);
-});
 
 // Serve bootstrapped HTML for SPA routes BEFORE history fallback
 staticRouter.use(async (req, res, next) => {
@@ -111,7 +109,7 @@ staticRouter.use(async (req, res, next) => {
   const lastSegment = req.path.split("/").pop() || "";
   if (lastSegment.includes(".") || req.path.startsWith("/api/")) return next();
 
-  if (req.path !== "/" && !POST_DETAIL_ROUTE.test(req.path)) {
+  if (req.path !== "/" && !POST_DETAIL_ROUTE.test(req.path) && req.path !== "/terms") {
     res.setHeader("Content-Type", "text/html; charset=UTF-8");
     res.setHeader("Cache-Control", "no-cache");
     return res.send(baseHtml);
