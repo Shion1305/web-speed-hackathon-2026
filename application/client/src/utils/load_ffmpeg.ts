@@ -1,6 +1,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 
 let ffmpegPromise: Promise<FFmpeg> | undefined;
+let ffmpegTaskQueue: Promise<void> = Promise.resolve();
 
 export async function loadFFmpeg(): Promise<FFmpeg> {
   if (ffmpegPromise != null) {
@@ -25,5 +26,31 @@ export async function loadFFmpeg(): Promise<FFmpeg> {
 }
 
 export function releaseFFmpeg() {
-  // FFmpeg を使い回し、動画・音声投稿時の再初期化コストを避ける
+  if (ffmpegPromise == null) {
+    return;
+  }
+
+  void ffmpegPromise
+    .then((ffmpeg) => {
+      ffmpeg.terminate();
+    })
+    .catch(() => undefined);
+
+  ffmpegPromise = undefined;
+  ffmpegTaskQueue = Promise.resolve();
+}
+
+export async function withFFmpeg<T>(task: (ffmpeg: FFmpeg) => Promise<T>): Promise<T> {
+  const runTask = async () => {
+    const ffmpeg = await loadFFmpeg();
+    return task(ffmpeg);
+  };
+
+  const taskResult = ffmpegTaskQueue.then(runTask, runTask);
+  ffmpegTaskQueue = taskResult.then(
+    () => undefined,
+    () => undefined,
+  );
+
+  return taskResult;
 }

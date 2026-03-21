@@ -1,23 +1,26 @@
 import { extractMetadataFromSound } from "@web-speed-hackathon-2026/client/src/utils/extract_metadata_from_sound";
-import { loadFFmpeg, releaseFFmpeg } from "@web-speed-hackathon-2026/client/src/utils/load_ffmpeg";
+import { withFFmpeg } from "@web-speed-hackathon-2026/client/src/utils/load_ffmpeg";
 
 interface Options {
   extension: string;
 }
 
-export async function convertSound(file: File, options: Options): Promise<Blob> {
-  const ffmpeg = await loadFFmpeg();
-  try {
-    const exportFile = `export.${options.extension}`;
+let transcodeSequence = 0;
 
-    await ffmpeg.writeFile("file", new Uint8Array(await file.arrayBuffer()));
+export async function convertSound(file: File, options: Options): Promise<Blob> {
+  const fileKey = `${Date.now()}-${transcodeSequence++}`;
+  const inputFile = `sound-input-${fileKey}`;
+  const exportFile = `sound-export-${fileKey}.${options.extension}`;
+
+  return withFFmpeg(async (ffmpeg) => {
+    await ffmpeg.writeFile(inputFile, new Uint8Array(await file.arrayBuffer()));
 
     // 文字化けを防ぐためにメタデータを抽出して付与し直す
     const metadata = await extractMetadataFromSound(file, ffmpeg);
 
     await ffmpeg.exec([
       "-i",
-      "file",
+      inputFile,
       "-metadata",
       `artist=${metadata.artist}`,
       "-metadata",
@@ -27,9 +30,9 @@ export async function convertSound(file: File, options: Options): Promise<Blob> 
     ]);
 
     const output = (await ffmpeg.readFile(exportFile)) as Uint8Array<ArrayBuffer>;
-    const blob = new Blob([output]);
-    return blob;
-  } finally {
-    releaseFFmpeg();
-  }
+
+    await Promise.allSettled([ffmpeg.deleteFile(inputFile), ffmpeg.deleteFile(exportFile)]);
+
+    return new Blob([output]);
+  });
 }
